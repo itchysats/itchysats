@@ -624,7 +624,7 @@ dependencies = [
  "ndarray_einsum_beta",
  "num",
  "pretty_assertions",
- "rand 0.6.5",
+ "rand 0.8.4",
  "reqwest",
  "rocket",
  "rocket-basicauth",
