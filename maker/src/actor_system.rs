@@ -10,6 +10,7 @@ use daemon::archive_closed_cfds;
 use daemon::archive_failed_cfds;
 use daemon::collab_settlement;
 use daemon::command;
+use daemon::identify;
 use daemon::monitor;
 use daemon::oracle;
 use daemon::oracle::NoAnnouncement;
@@ -19,6 +20,8 @@ use daemon::projection;
 use daemon::rollover;
 use daemon::seed::Identities;
 use daemon::wallet;
+use daemon::Environment;
+use daemon::ProtocolFactory;
 use libp2p_tcp::TokioTcpConfig;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::PartyParams;
@@ -31,6 +34,7 @@ use model::Price;
 use model::Role;
 use model::TxFeeRate;
 use model::Usd;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio_extras::Tasks;
@@ -177,30 +181,54 @@ where
         });
 
         let (listener_supervisor, listener_actor) = Supervisor::<_, listener::Error>::with_policy(
-            move || listener::Actor::new(endpoint_addr.clone(), listen_multiaddr.clone()),
+            {
+                let listen_multiaddr = listen_multiaddr.clone();
+                let endpoint_addr = endpoint_addr.clone();
+                move || listener::Actor::new(endpoint_addr.clone(), listen_multiaddr.clone())
+            },
             always_restart_after(RESTART_INTERVAL),
         );
 
+        // TODO: Shouldn't this actor also be supervised?
         let pong_address = pong::Actor.create(None).spawn(&mut tasks);
+
+        let (identify_listener_supervisor, identify_listener_actor) = Supervisor::new({
+            let identity = identity.libp2p.clone();
+            move || {
+                identify::listener::Actor::new(
+                    daemon::version::version().to_string(),
+                    Environment::Unknown,
+                    identity.public(),
+                    HashSet::from([listen_multiaddr.clone()]),
+                    ProtocolFactory::maker_listen_protocols(),
+                )
+            }
+        });
+
+        let (identify_dialer_supervisor, identify_dialer_actor) =
+            Supervisor::new(move || identify::dialer::Actor::new(endpoint_addr.clone()));
 
         let endpoint = Endpoint::new(
             Box::new(TokioTcpConfig::new),
             identity.libp2p,
             ENDPOINT_CONNECTION_TIMEOUT,
-            [
-                (rollover::PROTOCOL, libp2p_rollover_addr.into()),
-                (
-                    collab_settlement::PROTOCOL,
-                    libp2p_collab_settlement_addr.into(),
-                ),
-                (xtra_libp2p_ping::PROTOCOL_NAME, pong_address.clone().into()),
-            ],
+            ProtocolFactory::maker_protocol_handlers(
+                pong_address.clone(),
+                identify_listener_actor,
+                libp2p_rollover_addr,
+                libp2p_collab_settlement_addr,
+            ),
             endpoint::Subscribers::new(
                 vec![
                     ping_address.clone().into(),
                     maker_offer_address.clone().into(),
+                    identify_dialer_actor.clone().into(),
                 ],
-                vec![ping_address.into(), maker_offer_address.into()],
+                vec![
+                    ping_address.into(),
+                    maker_offer_address.into(),
+                    identify_dialer_actor.into(),
+                ],
                 vec![],
                 vec![listener_actor.into()],
             ),
@@ -210,6 +238,8 @@ where
 
         tasks.add(listener_supervisor.run_log_summary());
         tasks.add(ping_supervisor.run_log_summary());
+        tasks.add(identify_listener_supervisor.run_log_summary());
+        tasks.add(identify_dialer_supervisor.run_log_summary());
 
         tasks.add(
             inc_conn_ctx
