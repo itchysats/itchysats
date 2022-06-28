@@ -12,8 +12,6 @@ use xtra_libp2p::Endpoint;
 use xtra_libp2p::OpenSubstream;
 use xtra_productivity::xtra_productivity;
 
-// TODO: Move NUM_CONNECTIONS_GAUGE to a shared crate and then use it here and
-
 pub struct Actor {
     endpoint: Address<Endpoint>,
     peer_infos: HashMap<PeerId, PeerInfo>,
@@ -21,6 +19,8 @@ pub struct Actor {
 
 impl Actor {
     pub fn new(endpoint: Address<Endpoint>) -> Self {
+        NUM_LIBP2P_CONNECTIONS_GAUGE.reset();
+
         Self {
             endpoint,
             peer_infos: HashMap::default(),
@@ -158,3 +158,17 @@ impl Actor {
         }
     }
 }
+
+const WIRE_VERSION_LABEL: &str = "wire_version";
+const DAEMON_VERSION_LABEL: &str = "daemon_version";
+const ENVIRONMENT_LABEL: &str = "environment";
+
+static NUM_LIBP2P_CONNECTIONS_GAUGE: conquer_once::Lazy<prometheus::IntGaugeVec> =
+    conquer_once::Lazy::new(|| {
+        prometheus::register_int_gauge_vec!(
+            "libp2p_connections_total",
+            "The number of active libp2p connections.",
+            &[WIRE_VERSION_LABEL, DAEMON_VERSION_LABEL, ENVIRONMENT_LABEL]
+        )
+        .unwrap()
+    });
