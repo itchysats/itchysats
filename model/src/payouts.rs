@@ -15,6 +15,12 @@ pub struct Payouts {
     /// The full range of payout combinations by which a CFD can be
     /// settled.
     settlement: Vec<Payout>,
+    /// The payout combination which corresponds to the party with the
+    /// long position being liquidated.
+    long_liquidation: Payout,
+    /// The payout combination which corresponds to the party with the
+    /// short position being liquidated.
+    short_liquidation: Payout,
 }
 
 impl Payouts {
@@ -38,7 +44,7 @@ impl Payouts {
             fee,
         )?;
 
-        let settlement = match (position, role) {
+        let settlement: Vec<_> = match (position, role) {
             (Position::Long, Role::Taker) | (Position::Short, Role::Maker) => payouts
                 .into_iter()
                 .map(|payout| generate_payouts(payout.range, payout.short, payout.long))
@@ -51,10 +57,25 @@ impl Payouts {
                 .try_collect()?,
         };
 
-        Ok(Self { settlement })
+        let long_liquidation = settlement.first().expect("several payouts").clone();
+        let short_liquidation = settlement.last().expect("several payouts").clone();
+
+        Ok(Self {
+            settlement,
+            long_liquidation,
+            short_liquidation,
+        })
     }
 
     pub fn settlement(&self) -> Vec<Payout> {
         self.settlement.clone()
+    }
+
+    pub fn long_liquidation(&self) -> &Payout {
+        &self.long_liquidation
+    }
+
+    pub fn short_liquidation(&self) -> &Payout {
+        &self.short_liquidation
     }
 }
