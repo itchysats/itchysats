@@ -37,8 +37,8 @@ use maia_deprecated::create_cfd_transactions;
 use maia_deprecated::lock_descriptor;
 use maia_deprecated::renew_cfd_transactions;
 use maia_deprecated::spending_tx_sighash;
-use model::calculate_payouts;
 use model::olivia;
+use model::payouts;
 use model::Cet;
 use model::CompleteFee;
 use model::Dlc;
@@ -137,7 +137,7 @@ pub async fn new(
     let settlement_event_id = announcement.id;
     let payouts = HashMap::from_iter([(
         announcement.into(),
-        calculate_payouts(
+        payouts::calculate(
             position,
             role,
             setup_params.price,
@@ -414,7 +414,7 @@ pub async fn roll_over(
             id: announcement.id.to_string(),
             nonce_pks: announcement.nonce_pks.clone(),
         },
-        calculate_payouts(
+        payouts::calculate(
             our_position,
             our_role,
             rollover_params.price,

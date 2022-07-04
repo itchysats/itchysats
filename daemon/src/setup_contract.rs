@@ -24,8 +24,8 @@ use maia::lock_descriptor;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::PartyParams;
 use maia_core::PunishParams;
-use model::calculate_payouts;
 use model::olivia;
+use model::payouts;
 use model::Cet;
 use model::Dlc;
 use model::Position;
@@ -117,7 +117,7 @@ pub async fn new(
     let settlement_event_id = announcement.id;
     let payouts = HashMap::from_iter([(
         announcement.into(),
-        calculate_payouts(
+        payouts::calculate(
             position,
             role,
             setup_params.price,

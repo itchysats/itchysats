@@ -25,9 +25,9 @@ use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::Announcement;
 use maia_core::CfdTransactions;
 use maia_core::PartyParams;
-use model::calculate_payouts;
 use model::olivia;
 use model::olivia::BitMexPriceEventId;
+use model::payouts;
 use model::Cet;
 use model::Dlc;
 use model::FundingFee;
@@ -376,7 +376,7 @@ pub(crate) async fn build_own_cfd_transactions(
             id: announcement.id.to_string(),
             nonce_pks: announcement.nonce_pks.clone(),
         },
-        calculate_payouts(
+        payouts::calculate(
             our_position,
             punish_params.own_role,
             rollover_params.price,

@@ -39,14 +39,11 @@ use bdk::bitcoin::TxOut;
 use bdk::bitcoin::Txid;
 use bdk::descriptor::Descriptor;
 use bdk::miniscript::DescriptorTrait;
-use itertools::Itertools;
 use maia::spending_tx_sighash;
-use maia_core::generate_payouts;
 use maia_core::secp256k1_zkp;
 use maia_core::secp256k1_zkp::ecdsa::Signature;
 use maia_core::secp256k1_zkp::EcdsaAdaptorSignature;
 use maia_core::secp256k1_zkp::SECP256K1;
-use maia_core::Payout;
 use maia_core::TransactionExt;
 use num::Zero;
 use rust_decimal::Decimal;
@@ -1158,7 +1155,7 @@ impl Cfd {
         current_price: Price,
         n_payouts: usize,
     ) -> Result<(SettlementTransaction, SettlementProposal)> {
-        let payout_curve = calculate_payouts(
+        let payout_curve = payouts::calculate(
             self.position,
             self.role,
             self.initial_price,
@@ -1211,7 +1208,7 @@ impl Cfd {
 
         // Validate that the amounts sent by the taker are sane according to the payout curve
 
-        let payout_curve_long = calculate_payouts(
+        let payout_curve_long = payouts::calculate(
             self.position,
             self.role,
             self.initial_price,
@@ -2374,40 +2371,6 @@ impl CollaborativeSettlement {
 
     pub fn payout(&self) -> Amount {
         self.payout
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn calculate_payouts(
-    position: Position,
-    role: Role,
-    price: Price,
-    quantity: Usd,
-    long_leverage: Leverage,
-    short_leverage: Leverage,
-    n_payouts: usize,
-    fee: CompleteFee,
-) -> Result<Vec<Payout>> {
-    let payouts = payouts::calculate(
-        price,
-        quantity,
-        long_leverage,
-        short_leverage,
-        n_payouts,
-        fee,
-    )?;
-
-    match (position, role) {
-        (Position::Long, Role::Taker) | (Position::Short, Role::Maker) => payouts
-            .into_iter()
-            .map(|payout| generate_payouts(payout.range, payout.short, payout.long))
-            .flatten_ok()
-            .collect(),
-        (Position::Short, Role::Taker) | (Position::Long, Role::Maker) => payouts
-            .into_iter()
-            .map(|payout| generate_payouts(payout.range, payout.long, payout.short))
-            .flatten_ok()
-            .collect(),
     }
 }
 
