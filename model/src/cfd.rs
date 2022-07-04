@@ -3,7 +3,7 @@ use crate::hex_transaction;
 use crate::libp2p::PeerId;
 use crate::olivia;
 use crate::olivia::BitMexPriceEventId;
-use crate::payouts;
+use crate::payouts::Payouts;
 use crate::rollover;
 use crate::rollover::RolloverParams;
 use crate::CompleteFee;
@@ -1155,7 +1155,7 @@ impl Cfd {
         current_price: Price,
         n_payouts: usize,
     ) -> Result<(SettlementTransaction, SettlementProposal)> {
-        let payout_curve = payouts::calculate(
+        let payouts = Payouts::new(
             self.position,
             self.role,
             self.initial_price,
@@ -1164,11 +1164,12 @@ impl Cfd {
             self.short_leverage,
             n_payouts,
             self.fee_account.settle(),
-        )?;
+        )?
+        .settlement();
 
         let payout = {
             let current_price = current_price.try_into_u64()?;
-            payout_curve
+            payouts
                 .iter()
                 .find(|&x| x.digits().range().contains(&current_price))
                 .context("find current price on the payout curve")?
@@ -1208,7 +1209,7 @@ impl Cfd {
 
         // Validate that the amounts sent by the taker are sane according to the payout curve
 
-        let payout_curve_long = payouts::calculate(
+        let payouts = Payouts::new(
             self.position,
             self.role,
             self.initial_price,
@@ -1217,11 +1218,12 @@ impl Cfd {
             self.short_leverage,
             n_payouts,
             self.fee_account.settle(),
-        )?;
+        )?
+        .settlement();
 
         let payout = {
             let proposal_price = proposal.price.try_into_u64()?;
-            payout_curve_long
+            payouts
                 .iter()
                 .find(|&x| x.digits().range().contains(&proposal_price))
                 .context("find current price on the payout curve")?

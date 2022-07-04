@@ -30,11 +30,12 @@ mod contract_setup;
 pub mod hex_transaction;
 pub mod libp2p;
 pub mod olivia;
-pub mod payouts;
+mod payouts;
 mod rollover;
 
 pub use cfd::*;
 pub use contract_setup::SetupParams;
+pub use payouts::Payouts;
 pub use rollover::RolloverParams;
 pub use rollover::Version as RolloverVersion;
 

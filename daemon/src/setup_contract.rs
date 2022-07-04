@@ -25,9 +25,9 @@ use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::PartyParams;
 use maia_core::PunishParams;
 use model::olivia;
-use model::payouts;
 use model::Cet;
 use model::Dlc;
+use model::Payouts;
 use model::Position;
 use model::Role;
 use model::SetupParams;
@@ -117,7 +117,7 @@ pub async fn new(
     let settlement_event_id = announcement.id;
     let payouts = HashMap::from_iter([(
         announcement.into(),
-        payouts::calculate(
+        Payouts::new(
             position,
             role,
             setup_params.price,
@@ -126,7 +126,8 @@ pub async fn new(
             setup_params.short_leverage,
             n_payouts,
             setup_params.fee_account.settle(),
-        )?,
+        )?
+        .settlement(),
     )]);
 
     let own_cfd_txs = tokio::task::spawn_blocking({

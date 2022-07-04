@@ -27,12 +27,12 @@ use maia_core::CfdTransactions;
 use maia_core::PartyParams;
 use model::olivia;
 use model::olivia::BitMexPriceEventId;
-use model::payouts;
 use model::Cet;
 use model::Dlc;
 use model::FundingFee;
 use model::FundingRate;
 use model::OrderId;
+use model::Payouts;
 use model::Position;
 use model::RevokedCommit;
 use model::Role;
@@ -376,7 +376,7 @@ pub(crate) async fn build_own_cfd_transactions(
             id: announcement.id.to_string(),
             nonce_pks: announcement.nonce_pks.clone(),
         },
-        payouts::calculate(
+        Payouts::new(
             our_position,
             punish_params.own_role,
             rollover_params.price,
@@ -385,7 +385,8 @@ pub(crate) async fn build_own_cfd_transactions(
             rollover_params.short_leverage,
             n_payouts,
             complete_fee,
-        )?,
+        )?
+        .settlement(),
     )]);
 
     // unsign lock tx because PartiallySignedTransaction needs an unsigned tx
