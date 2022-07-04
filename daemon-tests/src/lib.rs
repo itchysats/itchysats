@@ -574,10 +574,10 @@ pub async fn mock_oracle_announcements(
 ) {
     taker
         .mocks
-        .mock_oracle_announcement_with(announcement.clone())
+        .mock_oracle_announcement_with(vec![announcement.clone()])
         .await;
     maker
         .mocks
-        .mock_oracle_announcement_with(announcement)
+        .mock_oracle_announcement_with(vec![announcement])
         .await;
 }

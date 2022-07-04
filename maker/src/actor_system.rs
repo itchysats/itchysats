@@ -68,7 +68,7 @@ pub struct ActorSystem<O: 'static, W: 'static> {
 impl<O, W> ActorSystem<O, W>
 where
     O: Handler<oracle::MonitorAttestation, Return = ()>
-        + Handler<oracle::GetAnnouncement, Return = Result<Announcement, NoAnnouncement>>
+        + Handler<oracle::GetAnnouncements, Return = Result<Vec<Announcement>, NoAnnouncement>>
         + Actor<Stop = ()>,
     W: Handler<wallet::BuildPartyParams, Return = Result<PartyParams>>
         + Handler<wallet::Sign, Return = Result<PartiallySignedTransaction>>

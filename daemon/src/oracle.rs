@@ -74,13 +74,13 @@ struct MonitorAttestations {
     pub event_ids: Vec<BitMexPriceEventId>,
 }
 
-/// Message used to request the `Announcement` from the
-/// `oracle::Actor`'s local state.
+/// Message used to request `Announcement`s from the `oracle::Actor`'s
+/// local state.
 ///
-/// The `Announcement` corresponds to the [`BitMexPriceEventId`] included in
-/// the message.
-#[derive(Clone, Copy)]
-pub struct GetAnnouncement(pub BitMexPriceEventId);
+/// Each `Announcement` corresponds to a [`BitMexPriceEventId`]
+/// included in the message.
+#[derive(Clone)]
+pub struct GetAnnouncements(pub Vec<BitMexPriceEventId>);
 
 #[derive(Debug, Clone)]
 pub struct Attestation(olivia::Attestation);
@@ -277,18 +277,25 @@ impl Actor {
         }
     }
 
-    fn handle_get_announcement(
+    fn handle_get_announcements(
         &mut self,
-        msg: GetAnnouncement,
-    ) -> Result<olivia::Announcement, NoAnnouncement> {
-        self.announcements
-            .get_key_value(&msg.0)
-            .map(|(id, (time, nonce_pks))| olivia::Announcement {
-                id: *id,
-                expected_outcome_time: *time,
-                nonce_pks: nonce_pks.clone(),
+        GetAnnouncements(ids): GetAnnouncements,
+    ) -> Result<Vec<olivia::Announcement>, NoAnnouncement> {
+        let announcements = ids
+            .iter()
+            .map(|id| {
+                self.announcements
+                    .get_key_value(id)
+                    .map(|(id, (time, nonce_pks))| olivia::Announcement {
+                        id: *id,
+                        expected_outcome_time: *time,
+                        nonce_pks: nonce_pks.clone(),
+                    })
+                    .ok_or(NoAnnouncement(*id))
             })
-            .ok_or(NoAnnouncement(msg.0))
+            .collect::<Result<_, _>>()?;
+
+        Ok(announcements)
     }
 
     fn handle_new_announcement_fetched(&mut self, msg: NewAnnouncementFetched) {

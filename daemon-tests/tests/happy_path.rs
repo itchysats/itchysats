@@ -1074,11 +1074,11 @@ async fn start_from_open_cfd_state(
 
     taker
         .mocks
-        .mock_oracle_announcement_with(announcement.clone())
+        .mock_oracle_announcement_with(vec![announcement.clone()])
         .await;
     maker
         .mocks
-        .mock_oracle_announcement_with(announcement)
+        .mock_oracle_announcement_with(vec![announcement])
         .await;
 
     let order_to_take = match position_maker {

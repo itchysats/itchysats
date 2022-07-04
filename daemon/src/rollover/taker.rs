@@ -38,7 +38,7 @@ pub struct Actor {
     endpoint: Address<Endpoint>,
     oracle_pk: XOnlyPublicKey,
     get_announcement:
-        MessageChannel<oracle::GetAnnouncement, Result<olivia::Announcement, NoAnnouncement>>,
+        MessageChannel<oracle::GetAnnouncements, Result<Vec<olivia::Announcement>, NoAnnouncement>>,
     n_payouts: usize,
     executor: command::Executor,
 }
@@ -64,8 +64,8 @@ impl Actor {
         executor: command::Executor,
         oracle_pk: XOnlyPublicKey,
         get_announcement: MessageChannel<
-            oracle::GetAnnouncement,
-            Result<olivia::Announcement, NoAnnouncement>,
+            oracle::GetAnnouncements,
+            Result<Vec<olivia::Announcement>, NoAnnouncement>,
         >,
         n_payouts: usize,
     ) -> Self {
@@ -172,7 +172,7 @@ impl Actor {
                                 .await?;
 
                             let announcement = get_announcement
-                                .send(oracle::GetAnnouncement(oracle_event_id))
+                                .send(oracle::GetAnnouncements(vec![oracle_event_id]))
                                 .await
                                 .context("Oracle actor disconnected")?
                                 .context("Failed to get announcement")?;
@@ -226,7 +226,7 @@ impl Actor {
                             let own_cfd_txs = build_own_cfd_transactions(
                                 &dlc,
                                 rollover_params,
-                                &announcement,
+                                &announcement[0],
                                 oracle_pk,
                                 our_position,
                                 n_payouts,
@@ -257,7 +257,7 @@ impl Actor {
                             let commit_desc = build_commit_descriptor(punish_params);
                             let (cets, refund_tx) = build_and_verify_cets_and_refund(
                                 &dlc,
-                                &announcement,
+                                &announcement[0],
                                 oracle_pk,
                                 publish_pk,
                                 our_role,
@@ -316,7 +316,7 @@ impl Actor {
                                 maker_lock_amount: dlc.maker_lock_amount,
                                 taker_lock_amount: dlc.taker_lock_amount,
                                 revoked_commit,
-                                settlement_event_id: announcement.id,
+                                settlement_event_id: announcement[0].id,
                                 refund_timelock: rollover_params.refund_timelock,
                             };
 

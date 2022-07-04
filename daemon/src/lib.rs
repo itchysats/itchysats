@@ -104,8 +104,8 @@ impl<O, W, P> TakerActorSystem<O, W, P>
 where
     O: Handler<oracle::MonitorAttestation, Return = ()>
         + Handler<
-            oracle::GetAnnouncement,
-            Return = Result<olivia::Announcement, oracle::NoAnnouncement>,
+            oracle::GetAnnouncements,
+            Return = Result<Vec<olivia::Announcement>, oracle::NoAnnouncement>,
         > + Actor<Stop = ()>,
     W: Handler<wallet::BuildPartyParams, Return = Result<maia_core::PartyParams>>
         + Handler<wallet::Sign, Return = Result<PartiallySignedTransaction>>

@@ -60,12 +60,15 @@ impl Mocks {
     }
 
     pub async fn mock_oracle_announcement(&mut self) {
-        self.mock_oracle_announcement_with(OliviaData::example_0().announcement())
+        self.mock_oracle_announcement_with(vec![OliviaData::example_0().announcement()])
             .await;
     }
 
-    pub async fn mock_oracle_announcement_with(&mut self, announcement: olivia::Announcement) {
-        self.oracle().await.set_announcement(announcement);
+    pub async fn mock_oracle_announcement_with(
+        &mut self,
+        announcements: Vec<olivia::Announcement>,
+    ) {
+        self.oracle().await.set_announcements(announcements);
     }
 
     pub async fn mock_party_params(&mut self) {

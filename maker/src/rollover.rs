@@ -60,7 +60,8 @@ pub struct Actor {
     taker_id: Identity,
     oracle_pk: XOnlyPublicKey,
     sent_from_taker: Option<UnboundedSender<wire::RolloverMsg>>,
-    oracle_actor: MessageChannel<oracle::GetAnnouncement, Result<Announcement, NoAnnouncement>>,
+    oracle_actor:
+        MessageChannel<oracle::GetAnnouncements, Result<Vec<Announcement>, NoAnnouncement>>,
     register: MessageChannel<connection::RegisterRollover, ()>,
     executor: command::Executor,
     version: RolloverVersion,
@@ -74,7 +75,10 @@ impl Actor {
         send_to_taker_actor: MessageChannel<connection::TakerMessage, Result<(), NoConnection>>,
         taker_id: Identity,
         oracle_pk: XOnlyPublicKey,
-        oracle_actor: MessageChannel<oracle::GetAnnouncement, Result<Announcement, NoAnnouncement>>,
+        oracle_actor: MessageChannel<
+            oracle::GetAnnouncements,
+            Result<Vec<Announcement>, NoAnnouncement>,
+        >,
         process_manager: xtra::Address<process_manager::Actor>,
         register: MessageChannel<connection::RegisterRollover, ()>,
         db: sqlite_db::Connection,
@@ -208,7 +212,7 @@ impl Actor {
 
         let announcement = self
             .oracle_actor
-            .send(oracle::GetAnnouncement(oracle_event_id))
+            .send(oracle::GetAnnouncements(vec![oracle_event_id]))
             .await
             .context("Oracle actor disconnected")?
             .context("Failed to get announcement")?;
@@ -230,7 +234,7 @@ impl Actor {
                 }
             }),
             receiver,
-            (self.oracle_pk, announcement),
+            (self.oracle_pk, announcement[0].clone()),
             rollover_params,
             Role::Maker,
             position,
