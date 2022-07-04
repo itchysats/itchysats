@@ -3,7 +3,7 @@ use crate::hex_transaction;
 use crate::libp2p::PeerId;
 use crate::olivia;
 use crate::olivia::BitMexPriceEventId;
-use crate::payout_curve;
+use crate::payouts;
 use crate::rollover;
 use crate::rollover::RolloverParams;
 use crate::CompleteFee;
@@ -2388,7 +2388,7 @@ pub fn calculate_payouts(
     n_payouts: usize,
     fee: CompleteFee,
 ) -> Result<Vec<Payout>> {
-    let payouts = payout_curve::calculate(
+    let payouts = payouts::calculate(
         price,
         quantity,
         long_leverage,

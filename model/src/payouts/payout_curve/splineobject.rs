@@ -1,6 +1,6 @@
-use crate::payout_curve::basis::BSplineBasis;
-use crate::payout_curve::csr_tools::CSR;
-use crate::payout_curve::Error;
+use crate::payouts::payout_curve::basis::BSplineBasis;
+use crate::payouts::payout_curve::csr_tools::CSR;
+use crate::payouts::payout_curve::Error;
 use itertools::Itertools;
 use ndarray::concatenate;
 use ndarray::prelude::*;

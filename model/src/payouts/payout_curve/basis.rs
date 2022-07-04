@@ -1,7 +1,7 @@
-use crate::payout_curve::basis_eval::*;
-use crate::payout_curve::csr_tools::CSR;
-use crate::payout_curve::utils::*;
-use crate::payout_curve::Error;
+use crate::payouts::payout_curve::basis_eval::*;
+use crate::payouts::payout_curve::csr_tools::CSR;
+use crate::payouts::payout_curve::utils::*;
+use crate::payouts::payout_curve::Error;
 use core::cmp::max;
 use ndarray::concatenate;
 use ndarray::prelude::*;
