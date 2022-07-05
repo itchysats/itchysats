@@ -1,6 +1,7 @@
 use crate::command;
 use crate::oracle;
 use crate::oracle::NoAnnouncement;
+use crate::rollover::protocol;
 use crate::rollover::protocol::*;
 use crate::shared_protocol::format_expect_msg_within;
 use anyhow::Context;
@@ -29,8 +30,6 @@ use xtra::message_channel::MessageChannel;
 use xtra_libp2p::NewInboundSubstream;
 use xtra_libp2p::Substream;
 use xtra_productivity::xtra_productivity;
-
-use super::protocol;
 
 type ListenerConnection = (
     Framed<Substream, JsonCodec<ListenerMessage, DialerMessage>>,

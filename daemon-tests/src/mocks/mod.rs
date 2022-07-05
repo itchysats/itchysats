@@ -1,4 +1,4 @@
-use super::maia::OliviaData;
+use crate::maia::OliviaData;
 use crate::mocks::monitor::MockMonitor;
 use crate::mocks::oracle::MockOracle;
 use crate::mocks::price_feed::MockPriceFeed;
