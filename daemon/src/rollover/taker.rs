@@ -1,8 +1,8 @@
 use crate::rollover;
 use crate::rollover::protocol::*;
-use crate::Txid;
 use anyhow::Context;
 use async_trait::async_trait;
+use bdk::bitcoin::Txid;
 use bdk_ext::keypair;
 use futures::SinkExt;
 use futures::StreamExt;

@@ -1,5 +1,3 @@
-use crate::bitcoin::secp256k1::SecretKey;
-use crate::bitcoin::PublicKey;
 use crate::shared_protocol::verify_adaptor_signature;
 use crate::shared_protocol::verify_cets;
 use crate::shared_protocol::verify_signature;
@@ -10,9 +8,11 @@ use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
 use bdk::bitcoin::secp256k1::ecdsa::Signature;
+use bdk::bitcoin::secp256k1::SecretKey;
 use bdk::bitcoin::secp256k1::SECP256K1;
 use bdk::bitcoin::util::psbt::PartiallySignedTransaction;
 use bdk::bitcoin::Amount;
+use bdk::bitcoin::PublicKey;
 use bdk::bitcoin::Transaction;
 use bdk::bitcoin::Txid;
 use bdk::descriptor::Descriptor;
