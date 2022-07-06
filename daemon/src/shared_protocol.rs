@@ -12,7 +12,6 @@ use maia_core::secp256k1_zkp::EcdsaAdaptorSignature;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::PartyParams;
 use std::ops::RangeInclusive;
-use std::time::Duration;
 
 pub(crate) async fn verify_cets(
     (oracle_pk, nonce_pks): (XOnlyPublicKey, Vec<XOnlyPublicKey>),
@@ -105,11 +104,4 @@ pub(crate) fn verify_cet_encsig(
         &bdk::bitcoin::PublicKey::new(adaptor_point),
         pk,
     )
-}
-
-/// Wrapper for the msg
-pub(crate) fn format_expect_msg_within(msg: &str, timeout: Duration) -> String {
-    let seconds = timeout.as_secs();
-
-    format!("Expected {msg} within {seconds} seconds")
 }

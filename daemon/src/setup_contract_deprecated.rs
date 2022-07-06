@@ -110,7 +110,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg0", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg0 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg0()?;
 
     tracing::info!("Exchanged setup parameters");
@@ -181,7 +186,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg1", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg1 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg1()?;
 
     tracing::info!("Exchanged CFD transactions");
@@ -265,7 +275,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg2", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg2 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg2()?;
     signed_lock_tx
         .combine(msg2.signed_lock)
@@ -345,7 +360,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg3", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg3 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg3()?;
 
     Ok(Dlc {
@@ -405,7 +425,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg0", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg0 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg0()?;
 
     let maker_lock_amount = dlc.maker_lock_amount;
@@ -490,7 +515,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg1", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg1 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg1()?;
 
     let lock_amount = taker_lock_amount + maker_lock_amount;
@@ -631,7 +661,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg2", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg2 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg2()?;
     let revocation_sk_theirs = msg2.revocation_sk;
 
@@ -668,7 +703,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg3", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg3 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg3()?;
 
     Ok(Dlc {
@@ -842,11 +882,4 @@ fn verify_cet_encsig(
         &bdk::bitcoin::PublicKey::new(adaptor_point),
         pk,
     )
-}
-
-/// Wrapper for the msg
-fn format_expect_msg_within(msg: &str, timeout: Duration) -> String {
-    let seconds = timeout.as_secs();
-
-    format!("Expected {msg} within {seconds} seconds")
 }

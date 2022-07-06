@@ -1,4 +1,3 @@
-use crate::shared_protocol::format_expect_msg_within;
 use crate::shared_protocol::verify_adaptor_signature;
 use crate::shared_protocol::verify_cets;
 use crate::shared_protocol::verify_signature;
@@ -89,7 +88,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg0", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg0 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg0")?
         .try_into_msg0()?;
 
@@ -161,7 +165,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg1", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg1 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg1")?
         .try_into_msg1()?;
 
@@ -246,7 +255,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg2", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg2 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg2")?
         .try_into_msg2()?;
     signed_lock_tx
@@ -327,7 +341,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg3", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg3 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg3")?
         .try_into_msg3()?;
 

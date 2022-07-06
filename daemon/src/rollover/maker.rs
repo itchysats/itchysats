@@ -3,7 +3,6 @@ use crate::oracle;
 use crate::oracle::NoAnnouncement;
 use crate::rollover::protocol;
 use crate::rollover::protocol::*;
-use crate::shared_protocol::format_expect_msg_within;
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -232,7 +231,7 @@ impl Actor {
                         .next()
                         .timeout(ROLLOVER_MSG_TIMEOUT, next_rollover_span)
                         .await
-                        .with_context(|| format_expect_msg_within("Msg0", ROLLOVER_MSG_TIMEOUT))?
+                        .with_context(|| format!("Expected Msg0 within {} seconds", ROLLOVER_MSG_TIMEOUT.as_secs()))?
                         .context("Empty stream instead of Msg0")?
                         .context("Unable to decode dialer Msg0")?
                         .into_rollover_msg()?
@@ -273,7 +272,7 @@ impl Actor {
                         .next()
                         .timeout(ROLLOVER_MSG_TIMEOUT, next_rollover_span)
                         .await
-                        .with_context(|| format_expect_msg_within("Msg1", ROLLOVER_MSG_TIMEOUT))?
+                        .with_context(|| format!("Expected Msg1 within {} seconds", ROLLOVER_MSG_TIMEOUT.as_secs()))?
                         .context("Empty stream instead of Msg1")?
                         .context("Unable to decode dialer Msg1")?
                         .into_rollover_msg()?
@@ -303,7 +302,7 @@ impl Actor {
                         .next()
                         .timeout(ROLLOVER_MSG_TIMEOUT, next_rollover_span)
                         .await
-                        .with_context(|| format_expect_msg_within("Msg2", ROLLOVER_MSG_TIMEOUT))?
+                        .with_context(|| format!("Expected Msg2 within {} seconds", ROLLOVER_MSG_TIMEOUT.as_secs()))?
                         .context("Empty stream instead of Msg2")?
                         .context("Unable to decode dialer Msg2")?
                         .into_rollover_msg()?
