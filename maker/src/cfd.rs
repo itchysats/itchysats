@@ -2,8 +2,8 @@ use crate::collab_settlement;
 use crate::connection;
 use crate::connection::NoConnection;
 use crate::contract_setup;
+use crate::legacy_rollover;
 use crate::metrics::time_to_first_position;
-use crate::rollover;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
@@ -185,7 +185,7 @@ pub struct Actor<O: 'static, T: 'static, W: 'static> {
     projection: xtra::Address<projection::Actor>,
     process_manager: xtra::Address<process_manager::Actor>,
     executor: command::Executor,
-    rollover_actors: AddressMap<OrderId, rollover::Actor>,
+    rollover_actors: AddressMap<OrderId, legacy_rollover::Actor>,
     takers: xtra::Address<T>,
     current_offers: Option<MakerOffers>,
     setup_actors: AddressMap<OrderId, contract_setup::Actor>,
@@ -302,7 +302,7 @@ where
         version: RolloverVersion,
         this: &xtra::Address<Self>,
     ) -> Result<()> {
-        let (rollover_actor_addr, fut) = rollover::Actor::new(
+        let (rollover_actor_addr, fut) = legacy_rollover::Actor::new(
             order_id,
             self.n_payouts,
             self.takers.clone().into(),
@@ -644,7 +644,7 @@ impl<O, T, W> Actor<O, T, W> {
             .rollover_actors
             .send_async(
                 &order_id,
-                rollover::AcceptRollover {
+                legacy_rollover::AcceptRollover {
                     tx_fee_rate: current_offers.tx_fee_rate,
                     long_funding_rate: current_offers.funding_rate_long,
                     short_funding_rate: current_offers.funding_rate_short,
@@ -703,7 +703,7 @@ impl<O, T, W> Actor<O, T, W> {
         // know the peer-id
         match self
             .rollover_actors
-            .send_async(&order_id, rollover::RejectRollover)
+            .send_async(&order_id, legacy_rollover::RejectRollover)
             .await
         {
             Ok(_) => Ok(()),
