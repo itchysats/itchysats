@@ -1724,6 +1724,84 @@ impl Cfd {
     }
 }
 
+#[async_trait::async_trait]
+pub trait ExecuteOnCfd {
+    async fn execute<T>(
+        &self,
+        id: OrderId,
+        command: impl FnOnce(Cfd) -> Result<T> + Send,
+    ) -> Result<T::Rest>
+    where
+        T: ExtractEventFromTuple + Send,
+        T::Rest: Send;
+}
+
+// TODO: Delete this weird thing once all our commands return only an `Event` and not other stuff as
+// well.
+pub trait ExtractEventFromTuple {
+    type Rest;
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest);
+}
+
+impl ExtractEventFromTuple for Option<CfdEvent> {
+    type Rest = ();
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest) {
+        (self, ())
+    }
+}
+
+impl ExtractEventFromTuple for CfdEvent {
+    type Rest = ();
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest) {
+        (Some(self), ())
+    }
+}
+
+impl<TOne> ExtractEventFromTuple for (CfdEvent, TOne) {
+    type Rest = TOne;
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest) {
+        (Some(self.0), self.1)
+    }
+}
+
+impl<TOne, TTwo> ExtractEventFromTuple for (CfdEvent, TOne, TTwo) {
+    type Rest = (TOne, TTwo);
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest) {
+        (Some(self.0), (self.1, self.2))
+    }
+}
+
+impl<TOne, TTwo, TThree> ExtractEventFromTuple for (CfdEvent, TOne, TTwo, TThree) {
+    type Rest = (TOne, TTwo, TThree);
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest) {
+        (Some(self.0), (self.1, self.2, self.3))
+    }
+}
+
+impl<TOne, TTwo, TThree, TFour> ExtractEventFromTuple for (CfdEvent, TOne, TTwo, TThree, TFour) {
+    type Rest = (TOne, TTwo, TThree, TFour);
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest) {
+        (Some(self.0), (self.1, self.2, self.3, self.4))
+    }
+}
+
+impl<TOne, TTwo, TThree, TFour, TFive> ExtractEventFromTuple
+    for (CfdEvent, TOne, TTwo, TThree, TFour, TFive)
+{
+    type Rest = (TOne, TTwo, TThree, TFour, TFive);
+
+    fn extract_event(self) -> (Option<CfdEvent>, Self::Rest) {
+        (Some(self.0), (self.1, self.2, self.3, self.4, self.5))
+    }
+}
+
 pub trait AsBlocks {
     /// Calculates the duration in Bitcoin blocks.
     ///

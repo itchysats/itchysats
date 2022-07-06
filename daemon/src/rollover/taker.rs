@@ -1,4 +1,3 @@
-use crate::command;
 use crate::oracle;
 use crate::oracle::NoAnnouncement;
 use crate::rollover;
@@ -14,6 +13,7 @@ use model::libp2p::PeerId;
 use model::olivia;
 use model::olivia::BitMexPriceEventId;
 use model::Dlc;
+use model::ExecuteOnCfd;
 use model::OrderId;
 use model::Role;
 use model::Timestamp;
@@ -33,17 +33,20 @@ use xtra_productivity::xtra_productivity;
 const DECISION_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// One actor to rule all the rollovers
-pub struct Actor {
+pub struct Actor<E> {
     endpoint: Address<Endpoint>,
     oracle_pk: XOnlyPublicKey,
     get_announcement:
         MessageChannel<oracle::GetAnnouncements, Result<Vec<olivia::Announcement>, NoAnnouncement>>,
     n_payouts: usize,
-    executor: command::Executor,
+    executor: E,
 }
 
 #[async_trait]
-impl xtra::Actor for Actor {
+impl<E> xtra::Actor for Actor<E>
+where
+    E: Send + Sync + 'static,
+{
     type Stop = ();
 
     async fn stopped(self) -> Self::Stop {}
@@ -57,10 +60,10 @@ pub struct ProposeRollover {
     pub from_settlement_event_id: BitMexPriceEventId,
 }
 
-impl Actor {
+impl<E> Actor<E> {
     pub fn new(
         endpoint: Address<Endpoint>,
-        executor: command::Executor,
+        executor: E,
         oracle_pk: XOnlyPublicKey,
         get_announcement: MessageChannel<
             oracle::GetAnnouncements,
@@ -78,7 +81,7 @@ impl Actor {
     }
 }
 
-impl Actor {
+impl<E> Actor<E> {
     async fn open_substream(&self, peer_id: PeerId) -> anyhow::Result<Substream> {
         Ok(self
             .endpoint
@@ -93,7 +96,10 @@ impl Actor {
 }
 
 #[xtra_productivity]
-impl Actor {
+impl<E> Actor<E>
+where
+    E: ExecuteOnCfd + Clone + Send + Sync + 'static,
+{
     pub async fn handle(&mut self, msg: ProposeRollover, ctx: &mut xtra::Context<Self>) {
         let ProposeRollover {
             order_id,

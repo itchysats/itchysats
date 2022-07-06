@@ -194,7 +194,7 @@ pub struct Actor<O: 'static, T: 'static, W: 'static> {
     time_to_first_position: xtra::Address<time_to_first_position::Actor>,
     connected_takers: HashSet<Identity>,
     n_payouts: usize,
-    libp2p_rollover: xtra::Address<daemon::rollover::maker::Actor>,
+    libp2p_rollover: xtra::Address<daemon::rollover::maker::Actor<command::Executor>>,
     libp2p_collab_settlement: xtra::Address<daemon::collab_settlement::maker::Actor>,
     libp2p_offer: xtra::Address<xtra_libp2p_offer::maker::Actor>,
 }
@@ -212,7 +212,7 @@ impl<O, T, W> Actor<O, T, W> {
         oracle: xtra::Address<O>,
         time_to_first_position: xtra::Address<time_to_first_position::Actor>,
         n_payouts: usize,
-        libp2p_rollover: xtra::Address<daemon::rollover::maker::Actor>,
+        libp2p_rollover: xtra::Address<daemon::rollover::maker::Actor<command::Executor>>,
         libp2p_collab_settlement: xtra::Address<daemon::collab_settlement::maker::Actor>,
         libp2p_offer: xtra::Address<xtra_libp2p_offer::maker::Actor>,
     ) -> Self {

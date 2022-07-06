@@ -2127,6 +2127,7 @@ name = "model"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bdk",
  "bdk-ext",
  "conquer-once",

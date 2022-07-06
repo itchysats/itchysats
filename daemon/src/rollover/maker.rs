@@ -1,4 +1,3 @@
-use crate::command;
 use crate::oracle;
 use crate::oracle::NoAnnouncement;
 use crate::rollover::protocol;
@@ -16,6 +15,7 @@ use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use model::olivia;
 use model::olivia::BitMexPriceEventId;
 use model::Dlc;
+use model::ExecuteOnCfd;
 use model::FundingRate;
 use model::OrderId;
 use model::Position;
@@ -41,19 +41,19 @@ type ListenerConnection = (
 ///
 /// There is only one instance of this actor for all connections, meaning we must always spawn a
 /// task whenever we interact with a substream to not block the execution of other connections.
-pub struct Actor {
+pub struct Actor<E> {
     protocol_tasks: HashMap<OrderId, Tasks>,
     oracle_pk: XOnlyPublicKey,
     get_announcement:
         MessageChannel<oracle::GetAnnouncements, Result<Vec<olivia::Announcement>, NoAnnouncement>>,
     n_payouts: usize,
     pending_protocols: HashMap<OrderId, ListenerConnection>,
-    executor: command::Executor,
+    executor: E,
 }
 
-impl Actor {
+impl<E> Actor<E> {
     pub fn new(
-        executor: command::Executor,
+        executor: E,
         oracle_pk: XOnlyPublicKey,
         get_announcement: MessageChannel<
             oracle::GetAnnouncements,
@@ -73,14 +73,20 @@ impl Actor {
 }
 
 #[async_trait]
-impl xtra::Actor for Actor {
+impl<E> xtra::Actor for Actor<E>
+where
+    E: Send + Sync + 'static,
+{
     type Stop = ();
 
     async fn stopped(self) -> Self::Stop {}
 }
 
 #[xtra_productivity]
-impl Actor {
+impl<E> Actor<E>
+where
+    E: ExecuteOnCfd + Clone + Send + Sync + 'static,
+{
     async fn handle(&mut self, msg: NewInboundSubstream, ctx: &mut xtra::Context<Self>) {
         let NewInboundSubstream { peer, stream } = msg;
         let address = ctx.address().expect("we are alive");
@@ -113,10 +119,7 @@ impl Actor {
             },
         );
     }
-}
 
-#[xtra_productivity]
-impl Actor {
     async fn handle(&mut self, msg: ProposeReceived) {
         let ProposeReceived {
             propose,
