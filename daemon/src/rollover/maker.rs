@@ -1,5 +1,3 @@
-use crate::oracle;
-use crate::oracle::NoAnnouncement;
 use crate::rollover::protocol;
 use crate::rollover::protocol::*;
 use anyhow::Context;
@@ -12,7 +10,6 @@ use futures::SinkExt;
 use futures::StreamExt;
 use libp2p_core::PeerId;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
-use model::olivia;
 use model::olivia::BitMexPriceEventId;
 use model::Dlc;
 use model::ExecuteOnCfd;
@@ -25,7 +22,6 @@ use model::TxFeeRate;
 use std::collections::HashMap;
 use tokio_extras::FutureExt;
 use tokio_extras::Tasks;
-use xtra::message_channel::MessageChannel;
 use xtra_libp2p::NewInboundSubstream;
 use xtra_libp2p::Substream;
 use xtra_productivity::xtra_productivity;
@@ -41,30 +37,21 @@ type ListenerConnection = (
 ///
 /// There is only one instance of this actor for all connections, meaning we must always spawn a
 /// task whenever we interact with a substream to not block the execution of other connections.
-pub struct Actor<E> {
+pub struct Actor<E, O> {
     protocol_tasks: HashMap<OrderId, Tasks>,
     oracle_pk: XOnlyPublicKey,
-    get_announcement:
-        MessageChannel<oracle::GetAnnouncements, Result<Vec<olivia::Announcement>, NoAnnouncement>>,
+    oracle: O,
     n_payouts: usize,
     pending_protocols: HashMap<OrderId, ListenerConnection>,
     executor: E,
 }
 
-impl<E> Actor<E> {
-    pub fn new(
-        executor: E,
-        oracle_pk: XOnlyPublicKey,
-        get_announcement: MessageChannel<
-            oracle::GetAnnouncements,
-            Result<Vec<olivia::Announcement>, NoAnnouncement>,
-        >,
-        n_payouts: usize,
-    ) -> Self {
+impl<E, O> Actor<E, O> {
+    pub fn new(executor: E, oracle_pk: XOnlyPublicKey, oracle: O, n_payouts: usize) -> Self {
         Self {
             protocol_tasks: HashMap::default(),
             oracle_pk,
-            get_announcement,
+            oracle,
             n_payouts,
             pending_protocols: HashMap::default(),
             executor,
@@ -73,9 +60,10 @@ impl<E> Actor<E> {
 }
 
 #[async_trait]
-impl<E> xtra::Actor for Actor<E>
+impl<E, O> xtra::Actor for Actor<E, O>
 where
     E: Send + Sync + 'static,
+    O: Send + Sync + 'static,
 {
     type Stop = ();
 
@@ -83,9 +71,10 @@ where
 }
 
 #[xtra_productivity]
-impl<E> Actor<E>
+impl<E, O> Actor<E, O>
 where
     E: ExecuteOnCfd + Clone + Send + Sync + 'static,
+    O: GetAnnouncements + Clone + Send + Sync + 'static,
 {
     async fn handle(&mut self, msg: NewInboundSubstream, ctx: &mut xtra::Context<Self>) {
         let NewInboundSubstream { peer, stream } = msg;
@@ -177,7 +166,7 @@ where
         tasks.add_fallible(
             {
                 let executor = self.executor.clone();
-                let get_announcement = self.get_announcement.clone();
+                let oracle = self.oracle.clone();
                 let oracle_pk = self.oracle_pk;
                 let n_payouts = self.n_payouts;
                 async move {
@@ -216,10 +205,9 @@ where
                         .await
                         .context("Failed to send rollover confirmation message")?;
 
-                    let announcement = get_announcement
-                        .send(oracle::GetAnnouncements(vec![oracle_event_id]))
+                    let announcement = oracle
+                        .get_announcements(vec![oracle_event_id])
                         .await
-                        .context("Oracle actor disconnected")?
                         .context("Failed to get announcement")?;
 
                     let funding_fee = *rollover_params.funding_fee();

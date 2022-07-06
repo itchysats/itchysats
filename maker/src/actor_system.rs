@@ -138,7 +138,7 @@ where
                 rollover::maker::Actor::new(
                     executor.clone(),
                     oracle_pk,
-                    oracle_addr.clone().into(),
+                    oracle::AnnouncementsChannel::new(oracle_addr.clone().into()),
                     n_payouts,
                 )
             }

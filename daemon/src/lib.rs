@@ -211,7 +211,7 @@ where
                     endpoint_addr.clone(),
                     executor.clone(),
                     oracle_pk,
-                    oracle_addr.clone().into(),
+                    oracle::AnnouncementsChannel::new(oracle_addr.clone().into()),
                     n_payouts,
                 )
             }

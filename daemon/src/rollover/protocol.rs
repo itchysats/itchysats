@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
+use async_trait::async_trait;
 use bdk::bitcoin::secp256k1::ecdsa::Signature;
 use bdk::bitcoin::secp256k1::SECP256K1;
 use bdk::bitcoin::util::psbt::PartiallySignedTransaction;
@@ -614,4 +615,12 @@ pub(crate) fn finalize_revoked_commits(
     });
 
     Ok(revoked_commit)
+}
+
+#[async_trait]
+pub trait GetAnnouncements {
+    async fn get_announcements(
+        &self,
+        events: Vec<BitMexPriceEventId>,
+    ) -> Result<Vec<olivia::Announcement>>;
 }

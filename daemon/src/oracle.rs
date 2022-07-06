@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use time::Duration;
 use time::OffsetDateTime;
+use xtra::message_channel::MessageChannel;
 use xtra_productivity::xtra_productivity;
 use xtras::SendInterval;
 
@@ -397,6 +398,44 @@ impl Attestation {
 
     pub fn id(&self) -> BitMexPriceEventId {
         self.0.id
+    }
+}
+
+/// Source of announcements based on their event IDs.
+///
+/// This is just a wrapper around a `MessageChannel` which would
+/// provide the same use. It is needed so that we can implement
+/// foreign traits on it to fulfil the requirements of external APIs.
+#[derive(Clone)]
+pub struct AnnouncementsChannel(
+    MessageChannel<GetAnnouncements, Result<Vec<olivia::Announcement>, NoAnnouncement>>,
+);
+
+impl AnnouncementsChannel {
+    pub fn new(
+        channel: MessageChannel<
+            GetAnnouncements,
+            Result<Vec<olivia::Announcement>, NoAnnouncement>,
+        >,
+    ) -> Self {
+        Self(channel)
+    }
+}
+
+#[async_trait]
+impl crate::rollover::protocol::GetAnnouncements for AnnouncementsChannel {
+    async fn get_announcements(
+        &self,
+        events: Vec<BitMexPriceEventId>,
+    ) -> Result<Vec<olivia::Announcement>> {
+        let announcements = self
+            .0
+            .send(GetAnnouncements(events))
+            .await
+            .context("Oracle actor disconnected")?
+            .context("Failed to get announcements")?;
+
+        Ok(announcements)
     }
 }
 

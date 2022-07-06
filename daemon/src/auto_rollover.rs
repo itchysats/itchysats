@@ -1,4 +1,5 @@
 use crate::command;
+use crate::oracle;
 use crate::rollover;
 use crate::rollover::taker::ProposeRollover;
 use crate::Txid;
@@ -18,13 +19,16 @@ use xtras::SendInterval;
 
 pub struct Actor {
     db: sqlite_db::Connection,
-    libp2p_rollover: Address<rollover::taker::Actor<command::Executor>>,
+    libp2p_rollover:
+        Address<rollover::taker::Actor<command::Executor, oracle::AnnouncementsChannel>>,
 }
 
 impl Actor {
     pub fn new(
         db: sqlite_db::Connection,
-        libp2p_rollover: Address<rollover::taker::Actor<command::Executor>>,
+        libp2p_rollover: Address<
+            rollover::taker::Actor<command::Executor, oracle::AnnouncementsChannel>,
+        >,
     ) -> Self {
         Self {
             db,
