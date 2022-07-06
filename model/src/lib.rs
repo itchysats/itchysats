@@ -32,6 +32,7 @@ pub mod libp2p;
 pub mod olivia;
 mod payouts;
 mod rollover;
+pub mod shared_protocol;
 
 pub use cfd::*;
 pub use contract_setup::SetupParams;

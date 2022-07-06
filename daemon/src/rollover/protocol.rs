@@ -1,6 +1,3 @@
-use crate::shared_protocol::verify_adaptor_signature;
-use crate::shared_protocol::verify_cets;
-use crate::shared_protocol::verify_signature;
 use crate::transaction_ext::TransactionExt;
 use anyhow::anyhow;
 use anyhow::bail;
@@ -27,6 +24,9 @@ use maia_core::CfdTransactions;
 use maia_core::PartyParams;
 use model::olivia;
 use model::olivia::BitMexPriceEventId;
+use model::shared_protocol::verify_adaptor_signature;
+use model::shared_protocol::verify_cets;
+use model::shared_protocol::verify_signature;
 use model::Cet;
 use model::Dlc;
 use model::ExecuteOnCfd;
@@ -508,7 +508,6 @@ pub(crate) async fn build_and_verify_cets_and_refund(
             commit_desc.clone(),
             commit_amount,
         )
-        .await
         .context("CET signatures don't verify")?;
     }
 

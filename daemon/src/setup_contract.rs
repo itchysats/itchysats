@@ -1,6 +1,3 @@
-use crate::shared_protocol::verify_adaptor_signature;
-use crate::shared_protocol::verify_cets;
-use crate::shared_protocol::verify_signature;
 use crate::transaction_ext::TransactionExt;
 use crate::wallet;
 use crate::wire::Msg0;
@@ -24,6 +21,9 @@ use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::PartyParams;
 use maia_core::PunishParams;
 use model::olivia;
+use model::shared_protocol::verify_adaptor_signature;
+use model::shared_protocol::verify_cets;
+use model::shared_protocol::verify_signature;
 use model::Cet;
 use model::Dlc;
 use model::Payouts;
@@ -215,16 +215,24 @@ pub async fn new(
             .cloned()
             .context("Expect event to exist in msg")?;
 
-        verify_cets(
-            (oracle_pk, own_grouped_cets.event.nonce_pks.clone()),
-            params.counterparty.clone(),
-            own_grouped_cets.cets,
-            counterparty_cets,
-            commit_desc.clone(),
-            commit_amount,
-        )
-        .await
-        .context("CET signatures don't verify")?;
+        tokio::task::spawn_blocking({
+            let commit_desc = commit_desc.clone();
+            let params_counterparty = params.counterparty.clone();
+            move || {
+                verify_cets(
+                    (oracle_pk, own_grouped_cets.event.nonce_pks.clone()),
+                    params_counterparty,
+                    own_grouped_cets.cets,
+                    counterparty_cets,
+                    commit_desc,
+                    commit_amount,
+                )
+                .context("CET signatures don't verify")?;
+
+                anyhow::Ok(())
+            }
+        })
+        .await??;
     }
 
     let lock_tx = own_cfd_txs.lock;
