@@ -57,7 +57,6 @@ pub mod oracle;
 pub mod position_metrics;
 pub mod process_manager;
 pub mod projection;
-pub mod rollover;
 pub mod seed;
 pub mod setup_contract;
 // TODO: Remove setup_contract_deprecated module after phasing out legacy networking

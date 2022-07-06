@@ -17,6 +17,7 @@ members = [
   "xtra-libp2p",
   "xtra-libp2p-ping",
   "xtra-libp2p-offer",
+  "xtra-libp2p-rollover",
   "sqlite-db",
 ]
 resolver = "2"

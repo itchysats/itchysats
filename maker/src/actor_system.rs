@@ -16,7 +16,6 @@ use daemon::oracle::NoAnnouncement;
 use daemon::position_metrics;
 use daemon::process_manager;
 use daemon::projection;
-use daemon::rollover;
 use daemon::seed::Identities;
 use daemon::wallet;
 use libp2p_tcp::TokioTcpConfig;

@@ -1,5 +1,4 @@
-use crate::rollover::protocol;
-use crate::rollover::protocol::*;
+use crate::protocol::*;
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -367,9 +366,9 @@ where
         tasks.add_fallible(
             async move {
                 framed
-                    .send(ListenerMessage::Decision(Decision::Reject(
-                        protocol::Reject { order_id },
-                    )))
+                    .send(ListenerMessage::Decision(Decision::Reject(Reject {
+                        order_id,
+                    })))
                     .await
             },
             move |e| async move {

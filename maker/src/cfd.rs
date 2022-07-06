@@ -194,9 +194,8 @@ pub struct Actor<O: 'static, T: 'static, W: 'static> {
     time_to_first_position: xtra::Address<time_to_first_position::Actor>,
     connected_takers: HashSet<Identity>,
     n_payouts: usize,
-    libp2p_rollover: xtra::Address<
-        daemon::rollover::maker::Actor<command::Executor, oracle::AnnouncementsChannel>,
-    >,
+    libp2p_rollover:
+        xtra::Address<rollover::maker::Actor<command::Executor, oracle::AnnouncementsChannel>>,
     libp2p_collab_settlement: xtra::Address<daemon::collab_settlement::maker::Actor>,
     libp2p_offer: xtra::Address<xtra_libp2p_offer::maker::Actor>,
 }
@@ -215,7 +214,7 @@ impl<O, T, W> Actor<O, T, W> {
         time_to_first_position: xtra::Address<time_to_first_position::Actor>,
         n_payouts: usize,
         libp2p_rollover: xtra::Address<
-            daemon::rollover::maker::Actor<command::Executor, oracle::AnnouncementsChannel>,
+            rollover::maker::Actor<command::Executor, oracle::AnnouncementsChannel>,
         >,
         libp2p_collab_settlement: xtra::Address<daemon::collab_settlement::maker::Actor>,
         libp2p_offer: xtra::Address<xtra_libp2p_offer::maker::Actor>,
@@ -605,7 +604,7 @@ impl<O, T, W> Actor<O, T, W> {
         // Using send here is fine because we dispatch to a task internally
         match self
             .libp2p_rollover
-            .send(daemon::rollover::maker::Accept {
+            .send(rollover::maker::Accept {
                 order_id,
                 tx_fee_rate: current_offers.tx_fee_rate,
                 long_funding_rate: current_offers.funding_rate_long,
@@ -670,7 +669,7 @@ impl<O, T, W> Actor<O, T, W> {
         // Using send here is fine because we dispatch to a task internally
         match self
             .libp2p_rollover
-            .send(daemon::rollover::maker::Reject { order_id })
+            .send(rollover::maker::Reject { order_id })
             .await
         {
             // Return early if dispatch to libp2p rollover worked

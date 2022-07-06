@@ -1,5 +1,5 @@
-use crate::rollover;
-use crate::rollover::protocol::*;
+use crate::protocol::*;
+use crate::PROTOCOL;
 use anyhow::Context;
 use async_trait::async_trait;
 use bdk::bitcoin::Txid;
@@ -78,10 +78,7 @@ impl<E, O> Actor<E, O> {
     async fn open_substream(&self, peer_id: PeerId) -> anyhow::Result<Substream> {
         Ok(self
             .endpoint
-            .send(OpenSubstream::single_protocol(
-                peer_id.inner(),
-                rollover::PROTOCOL,
-            ))
+            .send(OpenSubstream::single_protocol(peer_id.inner(), PROTOCOL))
             .await
             .context("Endpoint is disconnected")
             .context("Failed to open substream")??)

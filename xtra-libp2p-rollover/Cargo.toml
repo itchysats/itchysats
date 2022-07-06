@@ -1,0 +1,26 @@
+[package]
+name = "xtra-libp2p-rollover"
+version = "1.0.0"
+edition = "2021"
+description = "Implementation of the `/itchysats/rollover` protocol using xtra-libp2p."
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1.56"
+asynchronous-codec = { version = "0.6.0", features = ["json"] }
+bdk = { version = "0.19.0", default-features = false }
+bdk-ext = { path = "../bdk-ext" }
+futures = { version = "0.3", default-features = false }
+libp2p-core = { version = "0.33", default-features = false }
+maia = "0.2.0"
+maia-core = "0.1.1"
+model = { path = "../model" }
+rand = "0.6"
+serde = { version = "1" }
+thiserror = "1"
+tokio = { version = "1" }
+tokio-extras = { path = "../tokio-extras" }
+tracing = { version = "0.1" }
+xtra = { version = "0.6", features = ["instrumentation"] }
+xtra-libp2p = { path = "../xtra-libp2p" }
+xtra_productivity = { version = "0.1.0" }
