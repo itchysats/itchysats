@@ -1,4 +1,3 @@
-use crate::transaction_ext::TransactionExt;
 use crate::wallet;
 use crate::wire::Msg0;
 use crate::wire::Msg1;
@@ -30,6 +29,7 @@ use model::Payouts;
 use model::Position;
 use model::Role;
 use model::SetupParams;
+use model::TransactionExt;
 use model::CET_TIMELOCK;
 use std::collections::HashMap;
 use std::iter::FromIterator;

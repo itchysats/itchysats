@@ -1,4 +1,3 @@
-use crate::transaction_ext::TransactionExt;
 use crate::wallet;
 use crate::wire::Msg0;
 use crate::wire::Msg1;
@@ -47,6 +46,7 @@ use model::RevokedCommit;
 use model::Role;
 use model::RolloverParams;
 use model::SetupParams;
+use model::TransactionExt;
 use model::CET_TIMELOCK;
 use std::collections::HashMap;
 use std::iter::FromIterator;

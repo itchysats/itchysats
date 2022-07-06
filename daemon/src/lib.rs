@@ -64,7 +64,6 @@ pub mod setup_contract;
 pub mod setup_contract_deprecated;
 pub mod setup_taker;
 pub mod taker_cfd;
-mod transaction_ext;
 pub mod version;
 pub mod wallet;
 pub mod wire;

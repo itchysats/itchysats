@@ -1,4 +1,3 @@
-use crate::transaction_ext::TransactionExt;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
@@ -39,6 +38,7 @@ use model::RevokedCommit;
 use model::Role;
 use model::RolloverParams;
 use model::Timestamp;
+use model::TransactionExt;
 use model::TxFeeRate;
 use model::CET_TIMELOCK;
 use serde::Deserialize;
