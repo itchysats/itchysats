@@ -9,6 +9,7 @@ use crate::wire::RolloverMsg1;
 use crate::wire::RolloverMsg2;
 use crate::wire::RolloverMsg3;
 use crate::wire::SetupMsg;
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use bdk::bitcoin::secp256k1::ecdsa::Signature;
@@ -134,7 +135,7 @@ pub async fn new(
     let actual_margin = params.counterparty.lock_amount;
 
     if actual_margin != expected_margin {
-        anyhow::bail!(
+        bail!(
             "Amounts sent by counterparty don't add up, expected margin {expected_margin} but got {actual_margin}"
         )
     }
@@ -676,7 +677,7 @@ pub async fn roll_over(
         );
 
         if derived_rev_pk != dlc.revocation_pk_counterparty {
-            anyhow::bail!("Counterparty sent invalid revocation sk");
+            bail!("Counterparty sent invalid revocation sk");
         }
     }
 

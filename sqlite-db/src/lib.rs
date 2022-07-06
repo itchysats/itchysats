@@ -208,7 +208,7 @@ impl Connection {
         .await?;
 
         if query_result.rows_affected() != 1 {
-            anyhow::bail!("failed to insert cfd");
+            bail!("failed to insert cfd");
         }
 
         Ok(())
@@ -250,7 +250,7 @@ impl Connection {
         .await?;
 
         if query_result.rows_affected() != 1 {
-            anyhow::bail!("failed to insert event");
+            bail!("failed to insert event");
         }
 
         // if we have a rollover completed event we store it additionally in its own table
@@ -702,7 +702,7 @@ async fn delete_from_cfds_table(conn: &mut Transaction<'_, Sqlite>, id: OrderId)
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to delete from cfds");
+        bail!("failed to delete from cfds");
     }
 
     Ok(())
@@ -724,7 +724,7 @@ async fn delete_from_events_table(conn: &mut Transaction<'_, Sqlite>, id: OrderI
     .await?;
 
     if query_result.rows_affected() < 1 {
-        anyhow::bail!("failed to delete from events");
+        bail!("failed to delete from events");
     }
 
     Ok(())

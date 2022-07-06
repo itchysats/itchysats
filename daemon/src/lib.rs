@@ -2,6 +2,7 @@
 
 use crate::bitcoin::util::psbt::PartiallySignedTransaction;
 use crate::bitcoin::Txid;
+use anyhow::bail;
 use anyhow::Context as _;
 use anyhow::Result;
 use bdk::bitcoin;
@@ -365,7 +366,7 @@ where
         let threshold = QUOTE_INTERVAL_MINUTES.minutes() * 2;
 
         if latest_quote.is_older_than(threshold) {
-            anyhow::bail!(
+            bail!(
                 "Latest quote is older than {} minutes. Refusing to settle with old price.",
                 threshold.whole_minutes()
             )

@@ -240,7 +240,7 @@ async fn insert_failed_cfd(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert into failed_cfds");
+        bail!("failed to insert into failed_cfds");
     }
 
     Ok(())
@@ -275,7 +275,7 @@ async fn insert_event_log(
         .await?;
 
         if query_result.rows_affected() != 1 {
-            anyhow::bail!("failed to insert into event_log_failed");
+            bail!("failed to insert into event_log_failed");
         }
     }
 

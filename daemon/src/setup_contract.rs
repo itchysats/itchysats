@@ -4,6 +4,7 @@ use crate::wire::Msg1;
 use crate::wire::Msg2;
 use crate::wire::Msg3;
 use crate::wire::SetupMsg;
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use bdk::bitcoin::util::psbt::PartiallySignedTransaction;
@@ -113,7 +114,7 @@ pub async fn new(
     let actual_margin = params.counterparty.lock_amount;
 
     if actual_margin != expected_margin {
-        anyhow::bail!(
+        bail!(
             "Amounts sent by counterparty don't add up, expected margin {expected_margin} but got {actual_margin}"
         )
     }

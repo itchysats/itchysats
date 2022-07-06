@@ -1,4 +1,5 @@
 use crate::command;
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -185,7 +186,7 @@ impl Actor {
 
                     let code = response.status();
                     if !code.is_success() {
-                        anyhow::bail!("GET {url} responded with {code}");
+                        bail!("GET {url} responded with {code}");
                     }
 
                     let announcement = response
@@ -236,7 +237,7 @@ impl Actor {
 
                     let code = response.status();
                     if !code.is_success() {
-                        anyhow::bail!("GET {url} responded with {code}");
+                        bail!("GET {url} responded with {code}");
                     }
 
                     let attestation = response

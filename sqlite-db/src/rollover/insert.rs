@@ -1,5 +1,6 @@
 use crate::models;
 use crate::models::into_complete_fee_and_flow;
+use anyhow::bail;
 use anyhow::Result;
 use bdk::bitcoin::hashes::hex::ToHex;
 use model::Cet;
@@ -179,7 +180,7 @@ async fn insert_rollover_completed_event_data(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert rollover event data");
+        bail!("failed to insert rollover event data");
     }
     Ok(())
 }
@@ -228,7 +229,7 @@ async fn insert_revoked_commit_transaction(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert revoked transaction data");
+        bail!("failed to insert revoked transaction data");
     }
     Ok(())
 }
@@ -275,7 +276,7 @@ async fn insert_cet(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert cet data");
+        bail!("failed to insert cet data");
     }
     Ok(())
 }

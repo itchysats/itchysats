@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use anyhow::bail;
 use anyhow::Result;
 use bdk::bitcoin::util::bip32::ExtendedPrivKey;
 use bdk::bitcoin::Network;
@@ -125,7 +126,7 @@ impl RandomSeed {
     async fn write_to(&self, path: &Path) -> Result<()> {
         if path.exists() {
             let path = path.display();
-            anyhow::bail!("Refusing to overwrite file at {path}")
+            bail!("Refusing to overwrite file at {path}")
         }
 
         tokio::fs::write(path, &self.0).await?;

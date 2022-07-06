@@ -597,7 +597,7 @@ pub(crate) fn finalize_revoked_commits(
         ));
 
         if derived_rev_pk != dlc.revocation_pk_counterparty {
-            anyhow::bail!("Counterparty sent invalid revocation sk");
+            bail!("Counterparty sent invalid revocation sk");
         }
     }
 

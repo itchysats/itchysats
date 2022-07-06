@@ -1,4 +1,5 @@
 use crate::libp2p::PeerId;
+use anyhow::ensure;
 use anyhow::Context;
 use anyhow::Result;
 use bdk::bitcoin::Address;
@@ -570,7 +571,7 @@ pub struct FundingRate(Decimal);
 
 impl FundingRate {
     pub fn new(rate: Decimal) -> Result<Self> {
-        anyhow::ensure!(
+        ensure!(
             rate.abs() <= Decimal::ONE,
             "Funding rate can't be higher than 100%"
         );
