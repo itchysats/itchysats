@@ -9,7 +9,11 @@ use xtra_libp2p::Endpoint;
 use xtra_libp2p::GetConnectionStats;
 use xtra_productivity::xtra_productivity;
 
-use crate::connection::ConnectionStatus;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ConnectionStatus {
+    Online,
+    Offline,
+}
 
 /// Actor that transmits updates of ConnectionStatus of a specified PeerId based on
 /// information transmitted by the Endpoint via a watch channel.
@@ -51,7 +55,7 @@ impl xtra::Actor for Actor {
                 {
                     ConnectionStatus::Online
                 } else {
-                    ConnectionStatus::Offline { reason: None }
+                    ConnectionStatus::Offline
                 };
                 self.sender
                     .send(status)
@@ -64,7 +68,7 @@ impl xtra::Actor for Actor {
                 // This code path should not be hit, but in case we run into an error this sleep
                 // prevents a continuous endless loup of restarts.
                 self.sender
-                    .send(ConnectionStatus::Offline { reason: None })
+                    .send(ConnectionStatus::Offline)
                     .expect("Receiver to outlive this actor");
                 tokio_extras::time::sleep(Duration::from_secs(2)).await;
 
@@ -98,7 +102,7 @@ impl Actor {
 
         if msg.peer == self.watched_peer {
             self.sender
-                .send(ConnectionStatus::Offline { reason: None })
+                .send(ConnectionStatus::Offline)
                 .expect("Receiver to outlive this actor");
         }
     }
