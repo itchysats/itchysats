@@ -2,12 +2,15 @@ use crate::ConnectionCloseReason::MakerVersionOutdated;
 use crate::ConnectionCloseReason::TakerVersionOutdated;
 use daemon::bdk::bitcoin::Amount;
 use daemon::connection;
+use daemon::identify;
 use daemon::projection::Cfd;
 use daemon::projection::Quote;
+use daemon::ProtocolFactory;
 use model::Identity;
 use model::Timestamp;
 use rocket::response::stream::Event;
 use serde::Serialize;
+use std::collections::HashSet;
 
 pub trait ToSseEvent {
     fn to_sse_event(&self) -> Event;
@@ -88,5 +91,30 @@ impl ToSseEvent for connection::ConnectionStatus {
 impl ToSseEvent for Option<Quote> {
     fn to_sse_event(&self) -> Event {
         Event::json(self).event("quote")
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MakerCompatibility {
+    /// Protocols that the maker version does not support, but the taker version requires
+    unsupported_protocols: Option<HashSet<String>>,
+}
+
+impl ToSseEvent for Option<identify::PeerInfo> {
+    fn to_sse_event(&self) -> Event {
+        let maker_protocols_expected_by_taker = ProtocolFactory::taker_expects_from_maker();
+
+        let unsupported_protocols = self.as_ref().map(|identified_peer| {
+            maker_protocols_expected_by_taker
+                .difference(&identified_peer.protocols)
+                .cloned()
+                .collect()
+        });
+
+        let maker_compatibility = MakerCompatibility {
+            unsupported_protocols,
+        };
+
+        Event::json(&maker_compatibility).event("maker_compatibility")
     }
 }

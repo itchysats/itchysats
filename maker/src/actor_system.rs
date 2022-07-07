@@ -206,7 +206,7 @@ where
         });
 
         let (identify_dialer_supervisor, identify_dialer_actor) =
-            Supervisor::new(move || identify::dialer::Actor::new(endpoint_addr.clone()));
+            Supervisor::new(move || identify::dialer::Actor::new(endpoint_addr.clone(), None));
 
         let endpoint = Endpoint::new(
             Box::new(TokioTcpConfig::new),

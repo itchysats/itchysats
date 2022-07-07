@@ -1,8 +1,9 @@
 use crate::identify::protocol;
+use crate::identify::PeerInfo;
 use crate::identify::PROTOCOL;
-use crate::Environment;
 use async_trait::async_trait;
 use std::collections::HashMap;
+use tokio::sync::watch;
 use tokio_extras::spawn_fallible;
 use xtra::Address;
 use xtra::Context;
@@ -15,15 +16,20 @@ use xtra_productivity::xtra_productivity;
 pub struct Actor {
     endpoint: Address<Endpoint>,
     peer_infos: HashMap<PeerId, PeerInfo>,
+    peer_info_channel: Option<watch::Sender<Option<PeerInfo>>>,
 }
 
 impl Actor {
-    pub fn new(endpoint: Address<Endpoint>) -> Self {
+    pub fn new(
+        endpoint: Address<Endpoint>,
+        identified_peer_channel: Option<watch::Sender<Option<PeerInfo>>>,
+    ) -> Self {
         NUM_LIBP2P_CONNECTIONS_GAUGE.reset();
 
         Self {
             endpoint,
             peer_infos: HashMap::default(),
+            peer_info_channel: identified_peer_channel,
         }
     }
 }
@@ -40,34 +46,6 @@ pub(crate) struct GetPeerInfo(pub PeerId);
 pub(crate) struct IdentifyMsgReceived {
     peer_id: PeerId,
     identify_msg: protocol::IdentifyMsg,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PeerInfo {
-    pub wire_version: String,
-    pub daemon_version: String,
-    pub environment: Environment,
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Conversion to peer info failed: {error}")]
-pub struct ConversionError {
-    #[from]
-    error: anyhow::Error,
-}
-
-impl TryFrom<protocol::IdentifyMsg> for PeerInfo {
-    type Error = ConversionError;
-
-    fn try_from(identify_msg: protocol::IdentifyMsg) -> Result<Self, Self::Error> {
-        let peer_info = PeerInfo {
-            wire_version: identify_msg.wire_version(),
-            daemon_version: identify_msg.daemon_version()?,
-            environment: identify_msg.environment().into(),
-        };
-
-        Ok(peer_info)
-    }
 }
 
 #[xtra_productivity]
@@ -100,7 +78,13 @@ impl Actor {
             .inc();
 
         tracing::info!(%peer_id, %daemon_version, %environment, %wire_version, "New identify message received");
-        self.peer_infos.insert(peer_id, peer_info);
+        self.peer_infos.insert(peer_id, peer_info.clone());
+
+        if let Some(peer_info_channel) = &self.peer_info_channel {
+            if let Err(e) = peer_info_channel.send(Some(peer_info)) {
+                tracing::warn!("Failed to send identity info to notify channel: {e:#}");
+            }
+        }
     }
 }
 

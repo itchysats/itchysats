@@ -4,6 +4,7 @@ use daemon::bdk::bitcoin::Network;
 use daemon::bdk::blockchain::ElectrumBlockchain;
 use daemon::bdk::sled;
 use daemon::connection::ConnectionStatus;
+use daemon::identify;
 use daemon::oracle;
 use daemon::projection;
 use daemon::projection::CfdAction;
@@ -60,6 +61,7 @@ pub async fn feed(
     rx: &State<Feeds>,
     rx_wallet: &State<watch::Receiver<Option<WalletInfo>>>,
     rx_maker_status: &State<watch::Receiver<ConnectionStatus>>,
+    rx_maker_identity: &State<watch::Receiver<Option<identify::PeerInfo>>>,
     identity_info: &State<IdentityInfo>,
     _auth: Authenticated,
 ) -> EventStream![] {
@@ -69,6 +71,7 @@ pub async fn feed(
     let mut rx_quote = rx.quote.clone();
     let mut rx_wallet = rx_wallet.inner().clone();
     let mut rx_maker_status = rx_maker_status.inner().clone();
+    let mut rx_maker_identity = rx_maker_identity.inner().clone();
     let identity = identity_info.inner().clone();
     let mut heartbeat =
         tokio::time::interval(std::time::Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
@@ -79,6 +82,9 @@ pub async fn feed(
 
         let maker_status = rx_maker_status.borrow().clone();
         yield maker_status.to_sse_event();
+
+        let maker_identity = rx_maker_identity.borrow().clone();
+        yield maker_identity.to_sse_event();
 
         yield Event::json(&identity).event("identity");
 
@@ -103,6 +109,10 @@ pub async fn feed(
                 Ok(()) = rx_maker_status.changed() => {
                     let maker_status = rx_maker_status.borrow().clone();
                     yield maker_status.to_sse_event();
+                },
+                Ok(()) = rx_maker_identity.changed() => {
+                    let maker_identity = rx_maker_identity.borrow().clone();
+                    yield maker_identity.to_sse_event();
                 },
                 Ok(()) = rx_offers.changed() => {
                     let offers = rx_offers.borrow().clone();

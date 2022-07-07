@@ -42,6 +42,7 @@ use xtras::supervisor::Supervisor;
 use xtras::HandlerTimeoutExt;
 
 pub use bdk;
+use identify::PeerInfo;
 pub use maia;
 pub use maia_core;
 
@@ -104,6 +105,7 @@ impl ProtocolFactory {
 
     const MAKER_LISTEN: usize = 4;
     const TAKER_LISTEN: usize = 3;
+    const TAKER_EXPECTS_FROM_MAKER: usize = 4;
 
     pub fn maker_listen_protocols() -> HashSet<String> {
         // Latest protocols not to be removed!
@@ -155,6 +157,17 @@ impl ProtocolFactory {
             (Self::LATEST_OFFERS, offers.into()),
         ]
     }
+
+    pub fn taker_expects_from_maker() -> HashSet<String> {
+        let supported_protocols: [String; Self::TAKER_EXPECTS_FROM_MAKER] = [
+            Self::LATEST_PONG.to_string(),
+            Self::LATEST_IDENTIFY.to_string(),
+            Self::LATEST_ROLLOVER.to_string(),
+            Self::LATEST_COLLAB_SETTLEMENT.to_string(),
+        ];
+
+        HashSet::from(supported_protocols)
+    }
 }
 
 pub struct TakerActorSystem<O, W, P> {
@@ -168,8 +181,10 @@ pub struct TakerActorSystem<O, W, P> {
     _archive_failed_cfds_actor: Address<archive_failed_cfds::Actor>,
     _pong_actor: Address<pong::Actor>,
     _online_status_actor: Address<online_status::Actor>,
+    _identify_dialer_actor: Address<identify::dialer::Actor>,
 
     pub maker_online_status_feed_receiver: watch::Receiver<ConnectionStatus>,
+    pub identify_info_feed_receiver: watch::Receiver<Option<PeerInfo>>,
 
     _tasks: Tasks,
 }
@@ -215,6 +230,8 @@ where
     {
         let (maker_online_status_feed_sender, maker_online_status_feed_receiver) =
             watch::channel(ConnectionStatus::Offline { reason: None });
+
+        let (identify_info_feed_sender, identify_info_feed_receiver) = watch::channel(None);
 
         let (monitor_addr, monitor_ctx) = Context::new(None);
         let (oracle_addr, oracle_ctx) = Context::new(None);
@@ -347,10 +364,11 @@ where
                 )
             }
         });
-        let (identify_dialer_supervisor, identify_dialer_actor) = Supervisor::new({
-            let endpoint_addr = endpoint_addr.clone();
-            move || identify::dialer::Actor::new(endpoint_addr.clone())
-        });
+
+        let identify_dialer_actor =
+            identify::dialer::Actor::new(endpoint_addr.clone(), Some(identify_info_feed_sender))
+                .create(None)
+                .spawn(&mut tasks);
 
         let pong_address = pong::Actor.create(None).spawn(&mut tasks);
 
@@ -377,7 +395,7 @@ where
                     dialer_actor.into(),
                     ping_actor.into(),
                     online_status_actor.clone().into(),
-                    identify_dialer_actor.into(),
+                    identify_dialer_actor.clone().into(),
                 ],
                 vec![],
                 vec![],
@@ -389,7 +407,6 @@ where
         tasks.add(dialer_supervisor.run_log_summary());
         tasks.add(offers_supervisor.run_log_summary());
         tasks.add(identify_listener_supervisor.run_log_summary());
-        tasks.add(identify_dialer_supervisor.run_log_summary());
 
         let (supervisor, price_feed_actor) =
             Supervisor::<_, xtra_bitmex_price_feed::Error>::with_policy(
@@ -419,8 +436,10 @@ where
             _archive_failed_cfds_actor: archive_failed_cfds_actor,
             _tasks: tasks,
             maker_online_status_feed_receiver,
+            identify_info_feed_receiver,
             _online_status_actor: online_status_actor,
             _pong_actor: pong_address,
+            _identify_dialer_actor: identify_dialer_actor,
         })
     }
 
@@ -574,6 +593,45 @@ mod tests {
         assert!(
             maker_protocols.contains(ProtocolFactory::LATEST_COLLAB_SETTLEMENT),
             "Maker must support latest collab settlement"
+        );
+    }
+
+    #[test]
+    fn ensure_latest_taker_expects_from_maker_protocols() {
+        let taker_expects_from_maker = ProtocolFactory::taker_expects_from_maker();
+
+        assert!(
+            taker_expects_from_maker.contains(ProtocolFactory::LATEST_PONG),
+            "Maker must support latest pong"
+        );
+        assert!(
+            taker_expects_from_maker.contains(ProtocolFactory::LATEST_IDENTIFY),
+            "Maker must support latest identify"
+        );
+        assert!(
+            taker_expects_from_maker.contains(ProtocolFactory::LATEST_ROLLOVER),
+            "Maker must support latest rollover"
+        );
+        assert!(
+            taker_expects_from_maker.contains(ProtocolFactory::LATEST_COLLAB_SETTLEMENT),
+            "Maker must support latest collab settlement"
+        );
+    }
+
+    #[test]
+    fn ensure_expected_protocols_are_supported() {
+        let taker_expects_from_maker = ProtocolFactory::taker_expects_from_maker();
+        let maker_protocols = ProtocolFactory::maker_listen_protocols();
+
+        let unsupported_protocols = taker_expects_from_maker
+            .difference(&maker_protocols)
+            .cloned()
+            .collect::<HashSet<String>>();
+
+        assert!(
+            unsupported_protocols.is_empty(),
+            "Unexpected unsupported protocol {:?}",
+            unsupported_protocols
         );
     }
 }

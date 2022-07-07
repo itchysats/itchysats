@@ -70,6 +70,10 @@ impl IdentifyMsg {
     pub fn wire_version(&self) -> String {
         self.protocol_version.clone()
     }
+
+    pub fn protocols(&self) -> HashSet<String> {
+        self.protocols.clone()
+    }
 }
 
 pub(crate) async fn recv<S>(stream: S) -> Result<IdentifyMsg>
