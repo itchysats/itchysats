@@ -12,7 +12,6 @@ thiserror = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "tracing"] }
 tokio-extras = { path = "../tokio-extras", features = ["xtra"] }
 tracing = { version = "0.1" }
-uuid = { version = "1.1", features = ["v4"] }
 xtra = { version = "0.6", features = ["instrumentation"] }
 xtra_productivity = { version = "0.1.0", features = ["instrumentation"] }
 
