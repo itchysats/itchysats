@@ -7,7 +7,6 @@ use anyhow::Result;
 use bdk::bitcoin;
 use bdk::bitcoin::Amount;
 use bdk::FeeRate;
-use connection::ConnectionStatus;
 use libp2p_core::Multiaddr;
 use libp2p_tcp::TokioTcpConfig;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
@@ -20,6 +19,7 @@ use model::OrderId;
 use model::Price;
 use model::Role;
 use model::Usd;
+use online_status::ConnectionStatus;
 use parse_display::Display;
 use seed::Identities;
 use std::collections::HashSet;
@@ -55,7 +55,7 @@ pub mod connection;
 pub mod libp2p_utils;
 pub mod monitor;
 pub mod noise;
-mod online_status;
+pub mod online_status;
 pub mod oracle;
 pub mod position_metrics;
 pub mod process_manager;
@@ -229,7 +229,7 @@ where
             + Actor<Stop = ()>,
     {
         let (maker_online_status_feed_sender, maker_online_status_feed_receiver) =
-            watch::channel(ConnectionStatus::Offline { reason: None });
+            watch::channel(ConnectionStatus::Offline);
 
         let (identify_info_feed_sender, identify_info_feed_receiver) = watch::channel(None);
 
