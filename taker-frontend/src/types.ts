@@ -290,15 +290,13 @@ export interface WithdrawRequest {
 
 export interface ConnectionStatus {
     online: boolean;
-    connection_close_reason?: ConnectionCloseReason;
-}
-
-export const enum ConnectionCloseReason {
-    MAKER_VERSION_OUTDATED = "MakerVersionOutdated",
-    TAKER_VERSION_OUTDATED = "TakerVersionOutdated",
 }
 
 export interface IdentityInfo {
     taker_id: string;
     taker_peer_id: string;
+}
+
+export interface MakerCompatibility {
+    unsupported_protocols?: string[];
 }
