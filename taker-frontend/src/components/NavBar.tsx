@@ -24,7 +24,7 @@ import { Link as ReachLink, useLocation, useNavigate } from "react-router-dom";
 import { BG_DARK, BG_LIGHT, HEADER_HEIGHT, VIEWPORT_WIDTH_PX } from "../App";
 import logoBlack from "../images/logo_nav_bar_black.svg";
 import logoWhite from "../images/logo_nav_bar_white.svg";
-import { ConnectionCloseReason, ConnectionStatus, WalletInfo } from "../types";
+import { ConnectionStatus, WalletInfo } from "../types";
 import DollarAmount from "./DollarAmount";
 
 interface NavProps {
@@ -53,25 +53,6 @@ export default function Nav({ walletInfo, connectedToMaker, nextFundingEvent, re
     );
 
     const connectionStatus = (connectedToMaker: ConnectionStatus) => {
-        if (connectedToMaker.connection_close_reason) {
-            switch (connectedToMaker.connection_close_reason) {
-                case ConnectionCloseReason.MAKER_VERSION_OUTDATED:
-                    return {
-                        warn: true,
-                        light: "yellow.800",
-                        dark: "yellow.200",
-                        tooltip: "The maker is running an outdated version, please reach out to ItchySats!",
-                    };
-                case ConnectionCloseReason.TAKER_VERSION_OUTDATED:
-                    return {
-                        warn: true,
-                        light: "yellow.800",
-                        dark: "yellow.200",
-                        tooltip: "You are running an incompatible version, please upgrade!",
-                    };
-            }
-        }
-
         if (connectedToMaker.online) {
             return {
                 warn: false,
