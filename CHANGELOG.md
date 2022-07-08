@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in [comit-network's fork](https://github.com/comit-network/xtra) internally. Xtra message handler metrics were also
   removed in favour of the new `instrumentation` feature combined with
   [Grafana Tempo's span metrics](https://grafana.com/docs/tempo/latest/server_side_metrics/span_metrics/).
+- Replace intermediate confirmation step in rollover protocol for the maker with a configurable flag which can be updated during runtime using the new `POST /rollover-config` endpoint.
+  Rollovers are accepted by default on startup.
 
 ### Added
 

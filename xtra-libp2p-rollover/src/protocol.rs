@@ -623,3 +623,30 @@ pub trait GetAnnouncements {
         events: Vec<BitMexPriceEventId>,
     ) -> Result<Vec<olivia::Announcement>>;
 }
+
+#[async_trait]
+pub trait GetRates {
+    async fn get_rates(&self) -> Result<Rates>;
+}
+
+/// Set of rates needed to accept rollover proposals.
+#[derive(Clone, Copy)]
+pub struct Rates {
+    pub(crate) funding_rate_long: FundingRate,
+    pub(crate) funding_rate_short: FundingRate,
+    pub(crate) tx_fee_rate: TxFeeRate,
+}
+
+impl Rates {
+    pub fn new(
+        long_funding_rate: FundingRate,
+        short_funding_rate: FundingRate,
+        tx_fee_rate: TxFeeRate,
+    ) -> Self {
+        Self {
+            funding_rate_long: long_funding_rate,
+            funding_rate_short: short_funding_rate,
+            tx_fee_rate,
+        }
+    }
+}

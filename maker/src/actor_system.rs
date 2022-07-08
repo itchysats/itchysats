@@ -57,6 +57,9 @@ pub const RESTART_INTERVAL: Duration = Duration::from_secs(5);
 pub struct ActorSystem<O: 'static, W: 'static> {
     pub cfd_actor: Address<cfd::Actor<O, connection::Actor, W>>,
     wallet_actor: Address<W>,
+    pub rollover_actor: Address<
+        rollover::maker::Actor<command::Executor, oracle::AnnouncementsChannel, cfd::RatesChannel>,
+    >,
     _archive_closed_cfds_actor: Address<archive_closed_cfds::Actor>,
     _archive_failed_cfds_actor: Address<archive_failed_cfds::Actor>,
     executor: command::Executor,
@@ -130,20 +133,6 @@ where
         });
         tasks.add(collab_settlement_supervisor.run_log_summary());
 
-        let (rollover_supervisor, libp2p_rollover_addr) = Supervisor::new({
-            let executor = executor.clone();
-            let oracle_addr = oracle_addr.clone();
-            move || {
-                rollover::maker::Actor::new(
-                    executor.clone(),
-                    oracle_pk,
-                    oracle::AnnouncementsChannel::new(oracle_addr.clone().into()),
-                    n_payouts,
-                )
-            }
-        });
-        tasks.add(rollover_supervisor.run_log_summary());
-
         let (endpoint_addr, endpoint_context) = Context::new(None);
 
         let (supervisor, maker_offer_address) = Supervisor::new({
@@ -160,15 +149,30 @@ where
             projection_actor,
             process_manager_addr,
             inc_conn_addr,
-            oracle_addr,
+            oracle_addr.clone(),
             time_to_first_position_addr,
             n_payouts,
-            libp2p_rollover_addr.clone(),
             libp2p_collab_settlement_addr.clone(),
             maker_offer_address.clone(),
         )
         .create(None)
         .spawn(&mut tasks);
+
+        let (rollover_supervisor, libp2p_rollover_addr) = Supervisor::new({
+            let executor = executor.clone();
+            let oracle_addr = oracle_addr;
+            let cfd_actor_addr = cfd_actor_addr.clone();
+            move || {
+                rollover::maker::Actor::new(
+                    executor.clone(),
+                    oracle_pk,
+                    oracle::AnnouncementsChannel::new(oracle_addr.clone().into()),
+                    cfd::RatesChannel::new(cfd_actor_addr.clone().into()),
+                    n_payouts,
+                )
+            }
+        });
+        tasks.add(rollover_supervisor.run_log_summary());
 
         let (ping_supervisor, ping_address) = Supervisor::new({
             let endpoint_addr = endpoint_addr.clone();
@@ -187,7 +191,7 @@ where
             identity.libp2p,
             ENDPOINT_CONNECTION_TIMEOUT,
             [
-                (rollover::PROTOCOL, libp2p_rollover_addr.into()),
+                (rollover::PROTOCOL, libp2p_rollover_addr.clone().into()),
                 (
                     collab_settlement::PROTOCOL,
                     libp2p_collab_settlement_addr.into(),
@@ -242,6 +246,7 @@ where
         Ok(Self {
             cfd_actor: cfd_actor_addr,
             wallet_actor: wallet_addr,
+            rollover_actor: libp2p_rollover_addr,
             _archive_closed_cfds_actor: archive_closed_cfds_actor,
             _archive_failed_cfds_actor: archive_failed_cfds_actor,
             executor,
@@ -346,6 +351,15 @@ where
 
     pub async fn sync_wallet(&self) -> Result<()> {
         self.wallet_actor.send(wallet::Sync).await?;
+        Ok(())
+    }
+
+    pub async fn update_rollover_configuration(&self, is_accepting_rollovers: bool) -> Result<()> {
+        self.rollover_actor
+            .send(rollover::maker::UpdateConfiguration::new(
+                is_accepting_rollovers,
+            ))
+            .await?;
         Ok(())
     }
 }

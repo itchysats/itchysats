@@ -276,6 +276,30 @@ pub async fn get_metrics<'r>(_auth: Authenticated) -> Result<String, HttpApiProb
     Ok(metrics)
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct RolloverConfig {
+    is_accepting_rollovers: bool,
+}
+
+#[rocket::post("/rollover-config", data = "<config>")]
+#[instrument(name = "POST /rollover-config", skip(maker), err)]
+pub async fn update_rollover_configuration(
+    config: Json<RolloverConfig>,
+    maker: &State<Maker>,
+    _auth: Authenticated,
+) -> Result<(), HttpApiProblem> {
+    maker
+        .update_rollover_configuration(config.is_accepting_rollovers)
+        .await
+        .map_err(|e| {
+            HttpApiProblem::new(StatusCode::INTERNAL_SERVER_ERROR)
+                .title("Updating rollover configuration failed")
+                .detail(format!("{e:#}"))
+        })?;
+
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthCheck {
     daemon_version: String,
