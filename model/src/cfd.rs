@@ -2374,7 +2374,7 @@ impl Dlc {
 }
 
 #[derive(Debug, thiserror::Error, Clone, Copy)]
-#[error("Attestation {id} is irrelevant for DLC {txid}")]
+#[error("Attestation {id} is irrelevant for DLC with lock TX {txid}")]
 pub struct IrrelevantAttestation {
     id: BitMexPriceEventId,
     txid: Txid,
