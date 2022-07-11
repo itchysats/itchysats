@@ -2424,6 +2424,27 @@ impl Dlc {
             .filter(|id| *id != self.settlement_event_id) // only keep events which are _not_ the settlement event
             .collect()
     }
+
+    pub fn identity_pk(&self) -> PublicKey {
+        PublicKey::new(secp256k1_zkp::PublicKey::from_secret_key(
+            SECP256K1,
+            &self.identity,
+        ))
+    }
+
+    pub fn maker_identity_pk(&self, own_role: Role) -> PublicKey {
+        match own_role {
+            Role::Maker => self.identity_pk(),
+            Role::Taker => self.identity_counterparty,
+        }
+    }
+
+    pub fn taker_identity_pk(&self, own_role: Role) -> PublicKey {
+        match own_role {
+            Role::Maker => self.identity_counterparty,
+            Role::Taker => self.identity_pk(),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error, Clone, Copy)]

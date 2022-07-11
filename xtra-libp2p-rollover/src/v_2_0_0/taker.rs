@@ -219,12 +219,10 @@ where
                                 .into_rollover_msg()?
                                 .try_into_msg0()?;
 
-                            let punish_params = build_punish_params(
-                                our_role,
-                                dlc.identity,
-                                dlc.identity_counterparty,
-                                msg0,
+                            let punish_params = PunishParams::new(
+                                msg0.revocation_pk,
                                 rev_pk,
+                                msg0.publish_pk,
                                 publish_pk,
                             );
 
@@ -237,6 +235,7 @@ where
                                 n_payouts,
                                 complete_fee.into(),
                                 punish_params,
+                                Role::Taker,
                             )
                             .await?;
 
@@ -262,7 +261,11 @@ where
                                 .into_rollover_msg()?
                                 .try_into_msg1()?;
 
-                            let commit_desc = build_commit_descriptor(punish_params);
+                            let commit_desc = build_commit_descriptor(
+                                dlc.identity_counterparty,
+                                dlc.identity_pk(),
+                                punish_params,
+                            );
                             let (cets, refund_tx) = build_and_verify_cets_and_refund(
                                 &dlc,
                                 oracle_pk,
@@ -310,13 +313,9 @@ where
                                 identity: dlc.identity,
                                 identity_counterparty: dlc.identity_counterparty,
                                 revocation: rev_sk,
-                                revocation_pk_counterparty: punish_params
-                                    .counterparty_params()
-                                    .revocation_pk,
+                                revocation_pk_counterparty: punish_params.maker.revocation_pk,
                                 publish: publish_sk,
-                                publish_pk_counterparty: punish_params
-                                    .counterparty_params()
-                                    .publish_pk,
+                                publish_pk_counterparty: punish_params.maker.publish_pk,
                                 maker_address: dlc.maker_address,
                                 taker_address: dlc.taker_address,
                                 lock: dlc.lock.clone(),

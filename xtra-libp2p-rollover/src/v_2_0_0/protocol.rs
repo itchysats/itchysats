@@ -307,61 +307,27 @@ where
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct PunishParams {
-    maker_identity: PublicKey,
-    maker_params: maia_core::PunishParams,
-    taker_identity: PublicKey,
-    taker_params: maia_core::PunishParams,
-    own_role: Role,
+    pub(crate) maker: maia_core::PunishParams,
+    pub(crate) taker: maia_core::PunishParams,
 }
 
 impl PunishParams {
-    pub fn counterparty_params(&self) -> maia_core::PunishParams {
-        match self.own_role {
-            Role::Maker => self.taker_params,
-            Role::Taker => self.maker_params,
+    pub(crate) fn new(
+        maker_revocation: PublicKey,
+        taker_revocation: PublicKey,
+        maker_publish: PublicKey,
+        taker_publish: PublicKey,
+    ) -> Self {
+        Self {
+            maker: maia_core::PunishParams {
+                revocation_pk: maker_revocation,
+                publish_pk: maker_publish,
+            },
+            taker: maia_core::PunishParams {
+                revocation_pk: taker_revocation,
+                publish_pk: taker_publish,
+            },
         }
-    }
-}
-
-pub(crate) fn build_punish_params(
-    own_role: Role,
-    own_sk: SecretKey,
-    counterparty_pk: PublicKey,
-    counterparty_msg0: RolloverMsg0,
-    rev_pk: PublicKey,
-    publish_pk: PublicKey,
-) -> PunishParams {
-    let msg0 = counterparty_msg0;
-
-    let own_pk = PublicKey::new(secp256k1_zkp::PublicKey::from_secret_key(
-        SECP256K1, &own_sk,
-    ));
-
-    let counterparty_punish_params = maia_core::PunishParams {
-        revocation_pk: msg0.revocation_pk,
-        publish_pk: msg0.publish_pk,
-    };
-
-    let own_punish_params = maia_core::PunishParams {
-        revocation_pk: rev_pk,
-        publish_pk,
-    };
-
-    match own_role {
-        Role::Maker => PunishParams {
-            maker_identity: own_pk,
-            maker_params: own_punish_params,
-            taker_identity: counterparty_pk,
-            taker_params: counterparty_punish_params,
-            own_role,
-        },
-        Role::Taker => PunishParams {
-            maker_identity: counterparty_pk,
-            maker_params: counterparty_punish_params,
-            taker_identity: own_pk,
-            taker_params: own_punish_params,
-            own_role,
-        },
     }
 }
 
@@ -375,6 +341,7 @@ pub(crate) async fn build_own_cfd_transactions(
     n_payouts: usize,
     complete_fee: model::CompleteFee,
     punish_params: PunishParams,
+    role: Role,
 ) -> Result<CfdTransactions> {
     let sk = dlc.identity;
 
@@ -383,7 +350,7 @@ pub(crate) async fn build_own_cfd_transactions(
 
     let payouts = Payouts::new(
         our_position,
-        punish_params.own_role,
+        role,
         rollover_params.price,
         rollover_params.quantity,
         rollover_params.long_leverage,
@@ -401,6 +368,8 @@ pub(crate) async fn build_own_cfd_transactions(
         .for_each(|input| input.witness.clear());
 
     let lock_tx = PartiallySignedTransaction::from_unsigned_tx(unsigned_lock_tx)?;
+    let maker_identity_pk = dlc.maker_identity_pk(role);
+    let taker_identity_pk = dlc.taker_identity_pk(role);
     let own_cfd_txs = tokio::task::spawn_blocking({
         let maker_address = dlc.maker_address.clone();
         let taker_address = dlc.taker_address.clone();
@@ -410,16 +379,22 @@ pub(crate) async fn build_own_cfd_transactions(
             renew_cfd_transactions(
                 lock_tx,
                 (
-                    punish_params.maker_identity,
+                    maker_identity_pk,
                     maker_lock_amount,
                     maker_address,
-                    punish_params.maker_params,
+                    maia_core::PunishParams {
+                        revocation_pk: punish_params.maker.revocation_pk,
+                        publish_pk: punish_params.maker.publish_pk,
+                    },
                 ),
                 (
-                    punish_params.taker_identity,
+                    taker_identity_pk,
                     taker_lock_amount,
                     taker_address,
-                    punish_params.taker_params,
+                    maia_core::PunishParams {
+                        revocation_pk: punish_params.taker.revocation_pk,
+                        publish_pk: punish_params.taker.publish_pk,
+                    },
                 ),
                 oracle_pk,
                 (CET_TIMELOCK, rollover_params.refund_timelock),
@@ -435,17 +410,21 @@ pub(crate) async fn build_own_cfd_transactions(
     Ok(own_cfd_txs)
 }
 
-pub(crate) fn build_commit_descriptor(punish_params: PunishParams) -> Descriptor<PublicKey> {
+pub(crate) fn build_commit_descriptor(
+    maker_identity: PublicKey,
+    taker_identity: PublicKey,
+    punish_params: PunishParams,
+) -> Descriptor<PublicKey> {
     commit_descriptor(
         (
-            punish_params.maker_identity,
-            punish_params.maker_params.revocation_pk,
-            punish_params.maker_params.publish_pk,
+            maker_identity,
+            punish_params.maker.revocation_pk,
+            punish_params.maker.publish_pk,
         ),
         (
-            punish_params.taker_identity,
-            punish_params.taker_params.revocation_pk,
-            punish_params.taker_params.publish_pk,
+            taker_identity,
+            punish_params.taker.revocation_pk,
+            punish_params.taker.publish_pk,
         ),
     )
 }

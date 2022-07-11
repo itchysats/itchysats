@@ -261,13 +261,11 @@ where
                         .await
                         .context("Failed to send Msg0")?;
 
-                    let punish_params = build_punish_params(
-                        our_role,
-                        dlc.identity,
-                        dlc.identity_counterparty,
-                        msg0,
+                    let punish_params = PunishParams::new(
                         rev_pk,
+                        msg0.revocation_pk,
                         publish_pk,
+                        msg0.publish_pk,
                     );
 
                     let own_cfd_txs = build_own_cfd_transactions(
@@ -279,6 +277,7 @@ where
                         n_payouts,
                         complete_fee,
                         punish_params,
+                        Role::Maker,
                     )
                     .await?;
 
@@ -299,7 +298,7 @@ where
                         .await
                         .context("Failed to send Msg1")?;
 
-                    let commit_desc = build_commit_descriptor(punish_params);
+                    let commit_desc = build_commit_descriptor(dlc.identity_pk(), dlc.identity_counterparty, punish_params);
                     let (cets, refund_tx) = build_and_verify_cets_and_refund(
                         &dlc,
                         oracle_pk,
@@ -342,10 +341,10 @@ where
                         identity_counterparty: dlc.identity_counterparty,
                         revocation: rev_sk,
                         revocation_pk_counterparty: punish_params
-                            .counterparty_params()
+                            .taker
                             .revocation_pk,
                         publish: publish_sk,
-                        publish_pk_counterparty: punish_params.counterparty_params().publish_pk,
+                        publish_pk_counterparty: punish_params.taker.publish_pk,
                         maker_address: dlc.maker_address,
                         taker_address: dlc.taker_address,
                         lock: dlc.lock.clone(),
