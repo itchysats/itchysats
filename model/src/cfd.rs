@@ -888,7 +888,7 @@ impl Cfd {
 
     pub fn start_rollover_maker(
         &self,
-        from_tx_id_proposed: Txid,
+        from_txid_proposed: Txid,
     ) -> Result<(CfdEvent, BitMexPriceEventId, CompleteFee)> {
         if self.during_rollover {
             bail!("The CFD is already being rolled over")
@@ -903,31 +903,31 @@ impl Cfd {
 
         let current_commit_txid = dlc.commit.0.txid();
 
-        let (from_event_id, from_complete_fee) = if current_commit_txid == from_tx_id_proposed {
+        let (from_event_id, from_complete_fee) = if current_commit_txid == from_txid_proposed {
             (dlc.settlement_event_id, self.fee_account.settle())
         } else {
             let (from_event_id, from_complete_fee) = match dlc
                 .revoked_commit
                 .iter()
-                .find(|revoke_commit| revoke_commit.txid == from_tx_id_proposed)
+                .find(|revoke_commit| revoke_commit.txid == from_txid_proposed)
             {
                 Some(revoke_commit) => {
                     let from_event_id = revoke_commit.settlement_event_id.ok_or_else(|| anyhow!(
-                    "Proposed commit-txid {} not eligible for rollover because no event-id attached", from_tx_id_proposed
+                    "Proposed commit-txid {} not eligible for rollover because no event-id attached", from_txid_proposed
                     ))?;
                     let from_complete_fee = revoke_commit.complete_fee.ok_or_else(|| anyhow!(
-                        "Proposed commit-txid {} not eligible for rollover because no complete_fee attached", from_tx_id_proposed
+                        "Proposed commit-txid {} not eligible for rollover because no complete_fee attached", from_txid_proposed
                     ))?;
 
                     (from_event_id, from_complete_fee)
                 }
                 None => bail!(
                     "Unknown commit-txid {} proposed by taker",
-                    from_tx_id_proposed
+                    from_txid_proposed
                 ),
             };
 
-            tracing::info!(order_id=%self.id, commit_txid=%from_tx_id_proposed, %from_event_id, "Starting rollover from previous commit-txid");
+            tracing::info!(order_id=%self.id, commit_txid=%from_txid_proposed, %from_event_id, "Starting rollover from previous commit-txid");
 
             (from_event_id, from_complete_fee)
         };
@@ -2324,7 +2324,7 @@ impl Dlc {
             None => {
                 return Ok(Err(IrrelevantAttestation {
                     id: attestation.id,
-                    tx_id: self.lock.0.txid(),
+                    txid: self.lock.0.txid(),
                 }))
             }
         };
@@ -2374,10 +2374,10 @@ impl Dlc {
 }
 
 #[derive(Debug, thiserror::Error, Clone, Copy)]
-#[error("Attestation {id} is irrelevant for DLC {tx_id}")]
+#[error("Attestation {id} is irrelevant for DLC {txid}")]
 pub struct IrrelevantAttestation {
     id: BitMexPriceEventId,
-    tx_id: Txid,
+    txid: Txid,
 }
 
 /// Information which we need to remember in order to construct a
