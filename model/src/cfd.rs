@@ -1364,7 +1364,7 @@ impl Cfd {
             None => return Ok(None),
         };
 
-        let cet = dlc.signed_cet(attestation)?;
+        let cet = dlc.signed_cet(attestation)??;
 
         let cet = match cet {
             Ok(cet) => cet,
@@ -2318,21 +2318,26 @@ impl Dlc {
     pub fn signed_cet(
         &self,
         attestation: &olivia::Attestation,
-    ) -> Result<Result<Transaction, IrrelevantAttestation>> {
-        let cets = match self.cets.get(&attestation.id) {
+    ) -> Result<Result<Result<Transaction, IrrelevantAttestation>, PriceOutOfRange>> {
+        let event_id = attestation.id;
+        let price = attestation.price;
+        let cets = match self.cets.get(&event_id) {
             Some(cets) => cets,
             None => {
-                return Ok(Err(IrrelevantAttestation {
-                    id: attestation.id,
+                return Ok(Ok(Err(IrrelevantAttestation {
+                    id: event_id,
                     txid: self.lock.0.txid(),
-                }))
+                })))
             }
         };
 
         let cet = cets
             .iter()
-            .find(|Cet { range, .. }| range.contains(&attestation.price))
-            .context("Price out of range of cets")?;
+            .find(|Cet { range, .. }| range.contains(&price))
+            .ok_or(PriceOutOfRange {
+                id: event_id,
+                price,
+            })?;
         let encsig = cet.adaptor_sig;
 
         let mut decryption_sk = attestation.scalars[0];
@@ -2369,7 +2374,7 @@ impl Dlc {
             (counterparty_pubkey, counterparty_sig),
         )?;
 
-        Ok(Ok(signed_cet))
+        Ok(Ok(Ok(signed_cet)))
     }
 }
 
@@ -2378,6 +2383,13 @@ impl Dlc {
 pub struct IrrelevantAttestation {
     id: BitMexPriceEventId,
     txid: Txid,
+}
+
+#[derive(Debug, thiserror::Error, Clone, Copy)]
+#[error("Attested price {price} is not in range of any CETs for event {id}")]
+pub struct PriceOutOfRange {
+    id: BitMexPriceEventId,
+    price: u64,
 }
 
 /// Information which we need to remember in order to construct a
