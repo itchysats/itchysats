@@ -66,13 +66,8 @@ pub struct SyncAnnouncements;
 #[derive(Clone, Copy)]
 pub struct SyncAttestations;
 
-#[derive(Clone, Copy)]
-pub struct MonitorAttestation {
-    pub event_id: BitMexPriceEventId,
-}
-
 #[derive(Clone)]
-struct MonitorAttestations {
+pub struct MonitorAttestations {
     pub event_ids: Vec<BitMexPriceEventId>,
 }
 
@@ -104,7 +99,7 @@ struct NewAttestationFetched {
 
 #[derive(Default, Clone)]
 struct Cfd {
-    pending_attestation: Option<BitMexPriceEventId>,
+    event_ids: Option<Vec<BitMexPriceEventId>>,
     version: u32,
 }
 
@@ -112,11 +107,11 @@ impl Cfd {
     fn apply(mut self, event: CfdEvent) -> Self {
         self.version += 1;
 
-        let settlement_event_id = match event.event {
+        let event_ids = match event.event {
             EventKind::ContractSetupCompleted { dlc: None, .. } => return self,
-            EventKind::ContractSetupCompleted { dlc: Some(dlc), .. } => dlc.settlement_event_id,
+            EventKind::ContractSetupCompleted { dlc: Some(dlc), .. } => dlc.event_ids(),
             EventKind::RolloverCompleted { dlc: None, .. } => return self,
-            EventKind::RolloverCompleted { dlc: Some(dlc), .. } => dlc.settlement_event_id,
+            EventKind::RolloverCompleted { dlc: Some(dlc), .. } => dlc.event_ids(),
             // TODO: There might be a few cases where we do not need to monitor the attestation,
             // e.g. when we already agreed to collab. settle. Ignoring it for now
             // because I don't want to think about it and it doesn't cause much harm to do the
@@ -127,7 +122,7 @@ impl Cfd {
         // we can comfortably overwrite what was there because events are processed in order, thus
         // old attestations don't matter.
         Self {
-            pending_attestation: Some(settlement_event_id),
+            event_ids: Some(event_ids),
             ..self
         }
     }
@@ -269,10 +264,6 @@ impl Actor {
 
 #[xtra_productivity]
 impl Actor {
-    fn handle_monitor_attestation(&mut self, msg: MonitorAttestation) {
-        self.add_pending_attestation(msg.event_id)
-    }
-
     fn handle_monitor_attestations(&mut self, msg: MonitorAttestations) {
         for id in msg.event_ids.into_iter() {
             self.add_pending_attestation(id);
@@ -352,14 +343,11 @@ impl xtra::Actor for Actor {
         tokio_extras::spawn(&this.clone(), {
             let db = self.db.clone();
             async move {
-                let pending_attestations = db
+                let event_ids = db
                     .load_all_open_cfds::<Cfd>(())
                     .filter_map(|res| async move {
                         match res {
-                            Ok(Cfd {
-                                pending_attestation,
-                                ..
-                            }) => pending_attestation,
+                            Ok(Cfd { event_ids, .. }) => event_ids,
                             Err(e) => {
                                 tracing::warn!("Failed to load CFD from database: {e:#}");
                                 None
@@ -371,7 +359,7 @@ impl xtra::Actor for Actor {
 
                 let _: Result<(), xtra::Error> = this
                     .send(MonitorAttestations {
-                        event_ids: pending_attestations,
+                        event_ids: event_ids.concat(),
                     })
                     .await;
 
@@ -424,7 +412,24 @@ impl AnnouncementsChannel {
 }
 
 #[async_trait]
-impl rollover::protocol::GetAnnouncements for AnnouncementsChannel {
+impl rollover::v_1_0_0::protocol::GetAnnouncements for AnnouncementsChannel {
+    async fn get_announcements(
+        &self,
+        events: Vec<BitMexPriceEventId>,
+    ) -> Result<Vec<olivia::Announcement>> {
+        let announcements = self
+            .0
+            .send(GetAnnouncements(events))
+            .await
+            .context("Oracle actor disconnected")?
+            .context("Failed to get announcements")?;
+
+        Ok(announcements)
+    }
+}
+
+#[async_trait]
+impl rollover::v_2_0_0::protocol::GetAnnouncements for AnnouncementsChannel {
     async fn get_announcements(
         &self,
         events: Vec<BitMexPriceEventId>,

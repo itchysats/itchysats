@@ -4,11 +4,12 @@ use daemon::oracle;
 use model::olivia;
 use model::olivia::BitMexPriceEventId;
 use std::str::FromStr;
+use time::ext::NumericalDuration;
 
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct OliviaData {
-    id: BitMexPriceEventId,
+    ids: Vec<BitMexPriceEventId>,
     pk: XOnlyPublicKey,
     nonce_pks: Vec<XOnlyPublicKey>,
     price: u64,
@@ -39,7 +40,8 @@ impl OliviaData {
     fn example(id: &str, price: u64, nonce_pks: &[&str], attestations: &[&str]) -> Self {
         let oracle_pk = XOnlyPublicKey::from_str(Self::OLIVIA_PK).unwrap();
 
-        let id = id.parse().unwrap();
+        let id = id.parse::<BitMexPriceEventId>().unwrap();
+        let ids = olivia::hourly_events(id.timestamp(), id.timestamp() + 24.hours()).unwrap();
 
         let nonce_pks = nonce_pks
             .iter()
@@ -52,7 +54,7 @@ impl OliviaData {
             .collect();
 
         Self {
-            id,
+            ids,
             pk: oracle_pk,
             nonce_pks,
             attestations,
@@ -60,20 +62,30 @@ impl OliviaData {
         }
     }
 
-    pub fn announcement(&self) -> olivia::Announcement {
-        olivia::Announcement {
-            id: self.id,
-            expected_outcome_time: self.id.timestamp(),
-            nonce_pks: self.nonce_pks.clone(),
-        }
+    pub fn announcements(&self) -> Vec<olivia::Announcement> {
+        self.ids
+            .clone()
+            .into_iter()
+            .map(|id| olivia::Announcement {
+                id,
+                expected_outcome_time: id.timestamp(),
+                nonce_pks: self.nonce_pks.clone(),
+            })
+            .collect()
     }
 
-    pub fn attestation(&self) -> oracle::Attestation {
-        oracle::Attestation::new(olivia::Attestation {
-            id: self.id,
-            price: self.price,
-            scalars: self.attestations.clone(),
-        })
+    pub fn attestations(&self) -> Vec<oracle::Attestation> {
+        self.ids
+            .clone()
+            .into_iter()
+            .map(|id| {
+                oracle::Attestation::new(olivia::Attestation {
+                    id,
+                    price: self.price,
+                    scalars: self.attestations.clone(),
+                })
+            })
+            .collect()
     }
 
     const OLIVIA_PK: &'static str =

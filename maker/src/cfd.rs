@@ -286,7 +286,7 @@ where
 impl<O, T, W> Actor<O, T, W>
 where
     O: xtra::Handler<oracle::GetAnnouncements, Return = Result<Vec<Announcement>, NoAnnouncement>>
-        + xtra::Handler<oracle::MonitorAttestation, Return = ()>,
+        + xtra::Handler<oracle::MonitorAttestations, Return = ()>,
     T: xtra::Handler<connection::TakerMessage, Return = Result<(), NoConnection>>
         + xtra::Handler<connection::RegisterRollover, Return = ()>,
     W: 'static,
@@ -324,7 +324,7 @@ where
 impl<O, T, W> Actor<O, T, W>
 where
     O: xtra::Handler<oracle::GetAnnouncements, Return = Result<Vec<Announcement>, NoAnnouncement>>
-        + xtra::Handler<oracle::MonitorAttestation>,
+        + xtra::Handler<oracle::MonitorAttestations>,
     T: xtra::Handler<connection::ConfirmOrder, Return = Result<()>>
         + xtra::Handler<connection::TakerMessage, Return = Result<(), NoConnection>>
         + xtra::Handler<connection::BroadcastOffers, Return = ()>,
@@ -589,6 +589,10 @@ impl<O, T, W> Actor<O, T, W> {
         }
     }
 
+    // TODO: Because of this we need to have two rollover actor
+    // addresses here and either brute-force or remember which order
+    // corresponds to which version. Can we please just get rid of
+    // this step?
     async fn handle_accept_rollover(&mut self, msg: AcceptRollover) -> Result<()> {
         let current_offers = self
             .current_offers
@@ -644,7 +648,7 @@ impl<O, T, W> Actor<O, T, W> {
 
 impl<O, T, W> Actor<O, T, W>
 where
-    O: xtra::Handler<oracle::MonitorAttestation, Return = ()>,
+    O: xtra::Handler<oracle::MonitorAttestations, Return = ()>,
     T: xtra::Handler<connection::settlement::Response, Return = Result<()>>,
     W: 'static + Send,
 {
@@ -683,7 +687,7 @@ where
 impl<O, T, W> Actor<O, T, W>
 where
     O: xtra::Handler<oracle::GetAnnouncements, Return = Result<Vec<Announcement>, NoAnnouncement>>
-        + xtra::Handler<oracle::MonitorAttestation, Return = ()>,
+        + xtra::Handler<oracle::MonitorAttestations, Return = ()>,
     T: xtra::Handler<connection::ConfirmOrder, Return = Result<()>>
         + xtra::Handler<connection::TakerMessage, Return = Result<(), NoConnection>>
         + xtra::Handler<connection::BroadcastOffers, Return = ()>
@@ -875,8 +879,8 @@ impl RatesChannel {
 }
 
 #[async_trait]
-impl rollover::protocol::GetRates for RatesChannel {
-    async fn get_rates(&self) -> Result<rollover::protocol::Rates> {
+impl rollover::v_1_0_0::protocol::GetRates for RatesChannel {
+    async fn get_rates(&self) -> Result<rollover::v_1_0_0::protocol::Rates> {
         let MakerOffers {
             funding_rate_long,
             funding_rate_short,
@@ -889,7 +893,30 @@ impl rollover::protocol::GetRates for RatesChannel {
             .context("CFD actor disconnected")?
             .context("No up-to-date rates")?;
 
-        Ok(rollover::protocol::Rates::new(
+        Ok(rollover::v_1_0_0::protocol::Rates::new(
+            funding_rate_long,
+            funding_rate_short,
+            tx_fee_rate,
+        ))
+    }
+}
+
+#[async_trait]
+impl rollover::v_2_0_0::protocol::GetRates for RatesChannel {
+    async fn get_rates(&self) -> Result<rollover::v_2_0_0::protocol::Rates> {
+        let MakerOffers {
+            funding_rate_long,
+            funding_rate_short,
+            tx_fee_rate,
+            ..
+        } = self
+            .0
+            .send(GetOffers)
+            .await
+            .context("CFD actor disconnected")?
+            .context("No up-to-date rates")?;
+
+        Ok(rollover::v_2_0_0::protocol::Rates::new(
             funding_rate_long,
             funding_rate_short,
             tx_fee_rate,

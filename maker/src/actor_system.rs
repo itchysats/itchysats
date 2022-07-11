@@ -57,8 +57,19 @@ pub const RESTART_INTERVAL: Duration = Duration::from_secs(5);
 pub struct ActorSystem<O: 'static, W: 'static> {
     pub cfd_actor: Address<cfd::Actor<O, connection::Actor, W>>,
     wallet_actor: Address<W>,
-    pub rollover_actor: Address<
-        rollover::maker::Actor<command::Executor, oracle::AnnouncementsChannel, cfd::RatesChannel>,
+    pub rollover_actor_v_2_0_0: Address<
+        rollover::v_2_0_0::maker::Actor<
+            command::Executor,
+            oracle::AnnouncementsChannel,
+            cfd::RatesChannel,
+        >,
+    >,
+    pub rollover_actor_v_1_0_0: Address<
+        rollover::v_1_0_0::maker::Actor<
+            command::Executor,
+            oracle::AnnouncementsChannel,
+            cfd::RatesChannel,
+        >,
     >,
     _archive_closed_cfds_actor: Address<archive_closed_cfds::Actor>,
     _archive_failed_cfds_actor: Address<archive_failed_cfds::Actor>,
@@ -69,7 +80,7 @@ pub struct ActorSystem<O: 'static, W: 'static> {
 
 impl<O, W> ActorSystem<O, W>
 where
-    O: Handler<oracle::MonitorAttestation, Return = ()>
+    O: Handler<oracle::MonitorAttestations, Return = ()>
         + Handler<oracle::GetAnnouncements, Return = Result<Vec<Announcement>, NoAnnouncement>>
         + Actor<Stop = ()>,
     W: Handler<wallet::BuildPartyParams, Return = Result<PartyParams>>
@@ -158,12 +169,12 @@ where
         .create(None)
         .spawn(&mut tasks);
 
-        let (rollover_supervisor, libp2p_rollover_addr) = Supervisor::new({
+        let (rollover_supervisor_v_1_0_0, rollover_v_1_0_0_addr) = Supervisor::new({
             let executor = executor.clone();
-            let oracle_addr = oracle_addr;
+            let oracle_addr = oracle_addr.clone();
             let cfd_actor_addr = cfd_actor_addr.clone();
             move || {
-                rollover::maker::Actor::new(
+                rollover::v_1_0_0::maker::Actor::new(
                     executor.clone(),
                     oracle_pk,
                     oracle::AnnouncementsChannel::new(oracle_addr.clone().into()),
@@ -172,7 +183,23 @@ where
                 )
             }
         });
-        tasks.add(rollover_supervisor.run_log_summary());
+        tasks.add(rollover_supervisor_v_1_0_0.run_log_summary());
+
+        let (rollover_supervisor_v_2_0_0, rollover_v_2_0_0_addr) = Supervisor::new({
+            let executor = executor.clone();
+            let oracle_addr = oracle_addr;
+            let cfd_actor_addr = cfd_actor_addr.clone();
+            move || {
+                rollover::v_2_0_0::maker::Actor::new(
+                    executor.clone(),
+                    oracle_pk,
+                    oracle::AnnouncementsChannel::new(oracle_addr.clone().into()),
+                    cfd::RatesChannel::new(cfd_actor_addr.clone().into()),
+                    n_payouts,
+                )
+            }
+        });
+        tasks.add(rollover_supervisor_v_2_0_0.run_log_summary());
 
         let (ping_supervisor, ping_address) = Supervisor::new({
             let endpoint_addr = endpoint_addr.clone();
@@ -191,7 +218,14 @@ where
             identity.libp2p,
             ENDPOINT_CONNECTION_TIMEOUT,
             [
-                (rollover::PROTOCOL, libp2p_rollover_addr.clone().into()),
+                (
+                    rollover::v_1_0_0::PROTOCOL,
+                    rollover_v_1_0_0_addr.clone().into(),
+                ),
+                (
+                    rollover::v_2_0_0::PROTOCOL,
+                    rollover_v_2_0_0_addr.clone().into(),
+                ),
                 (
                     collab_settlement::PROTOCOL,
                     libp2p_collab_settlement_addr.into(),
@@ -246,7 +280,8 @@ where
         Ok(Self {
             cfd_actor: cfd_actor_addr,
             wallet_actor: wallet_addr,
-            rollover_actor: libp2p_rollover_addr,
+            rollover_actor_v_2_0_0: rollover_v_2_0_0_addr,
+            rollover_actor_v_1_0_0: rollover_v_1_0_0_addr,
             _archive_closed_cfds_actor: archive_closed_cfds_actor,
             _archive_failed_cfds_actor: archive_failed_cfds_actor,
             executor,
@@ -355,8 +390,13 @@ where
     }
 
     pub async fn update_rollover_configuration(&self, is_accepting_rollovers: bool) -> Result<()> {
-        self.rollover_actor
-            .send(rollover::maker::UpdateConfiguration::new(
+        self.rollover_actor_v_1_0_0
+            .send(rollover::v_1_0_0::maker::UpdateConfiguration::new(
+                is_accepting_rollovers,
+            ))
+            .await?;
+        self.rollover_actor_v_2_0_0
+            .send(rollover::v_2_0_0::maker::UpdateConfiguration::new(
                 is_accepting_rollovers,
             ))
             .await?;

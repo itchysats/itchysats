@@ -38,6 +38,7 @@ pub mod transaction_ext;
 
 pub use cfd::*;
 pub use contract_setup::SetupParams;
+pub use payouts::OraclePayouts;
 pub use payouts::Payouts;
 pub use rollover::RolloverParams;
 pub use rollover::Version as RolloverVersion;

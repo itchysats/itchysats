@@ -332,7 +332,7 @@ async fn collaboratively_close_an_open_cfd_maker_going_long() {
 
 async fn collaboratively_close_an_open_cfd(maker_position: Position) {
     let (mut maker, mut taker, order_id, _) =
-        start_from_open_cfd_state(OliviaData::example_0().announcement(), maker_position).await;
+        start_from_open_cfd_state(OliviaData::example_0().announcements(), maker_position).await;
     taker.mocks.mock_latest_quote(Some(dummy_quote())).await;
     maker.mocks.mock_latest_quote(Some(dummy_quote())).await;
     next_with(taker.quote_feed(), |q| q).await.unwrap(); // if quote is available on feed, it propagated through the system
@@ -373,7 +373,7 @@ async fn force_close_an_open_cfd_maker_going_long() {
 async fn force_close_open_cfd(maker_position: Position) {
     let oracle_data = OliviaData::example_0();
     let (mut maker, mut taker, order_id, _) =
-        start_from_open_cfd_state(oracle_data.announcement(), maker_position).await;
+        start_from_open_cfd_state(oracle_data.announcements(), maker_position).await;
     // Taker initiates force-closing
     taker.system.commit(order_id).await.unwrap();
 
@@ -391,7 +391,12 @@ async fn force_close_open_cfd(maker_position: Position) {
     wait_next_state!(order_id, maker, taker, CfdState::OpenCommitted);
 
     // Delivering correct attestation moves the state `PendingCet`
-    simulate_attestation!(taker, maker, order_id, oracle_data.attestation());
+    simulate_attestation!(
+        taker,
+        maker,
+        order_id,
+        oracle_data.attestations()[0].clone()
+    );
 
     sleep(Duration::from_secs(5)).await; // need to wait a bit until both transition
     wait_next_state!(order_id, maker, taker, CfdState::PendingCet);
@@ -488,20 +493,20 @@ async fn retry_rollover_an_open_cfd() {
     let _guard = init_tracing();
 
     let contract_setup_oracle_data = OliviaData::example_0();
-    let contract_setup_oracle_data_announcement = contract_setup_oracle_data.announcement();
+    let contract_setup_oracle_data_announcements = contract_setup_oracle_data.announcements();
     let (mut maker, mut taker, order_id, fee_structure) =
         prepare_rollover(Position::Short, contract_setup_oracle_data.clone()).await;
 
     let taker_commit_txid_after_contract_setup = taker.latest_commit_txid();
 
     let first_rollover_oracle_data = OliviaData::example_1();
-    let first_rollover_oracle_data_announcement = first_rollover_oracle_data.announcement();
+    let first_rollover_oracle_data_announcements = first_rollover_oracle_data.announcements();
 
     // We mock a different oracle event-id for the first rollover
     mock_oracle_announcements(
         &mut maker,
         &mut taker,
-        first_rollover_oracle_data_announcement.clone(),
+        first_rollover_oracle_data_announcements.clone(),
     )
     .await;
 
@@ -540,7 +545,7 @@ async fn retry_rollover_an_open_cfd() {
     mock_oracle_announcements(
         &mut maker,
         &mut taker,
-        contract_setup_oracle_data_announcement.clone(),
+        contract_setup_oracle_data_announcements.clone(),
     )
     .await;
 
@@ -556,7 +561,7 @@ async fn retry_rollover_an_open_cfd() {
         contract_setup_oracle_data,
         Some((
             taker_commit_txid_after_contract_setup,
-            contract_setup_oracle_data_announcement.id,
+            contract_setup_oracle_data_announcements.last().unwrap().id,
         )),
         expected_maker_fee,
         expected_taker_fee,
@@ -586,7 +591,7 @@ async fn prepare_rollover(
     oracle_data: OliviaData,
 ) -> (Maker, Taker, OrderId, FeeStructure) {
     let (mut maker, mut taker, order_id, fee_structure) =
-        start_from_open_cfd_state(oracle_data.announcement(), maker_position).await;
+        start_from_open_cfd_state(oracle_data.announcements(), maker_position).await;
 
     // Maker needs to have an active offer in order to accept rollover
     maker
@@ -646,7 +651,7 @@ async fn rollover(
 
     // Ensure that the event ID of the latest dlc is the event ID used for rollover
     assert_eq!(
-        oracle_data.announcement().id,
+        oracle_data.announcements().last().unwrap().id,
         maker_cfd
             .aggregated()
             .latest_dlc()
@@ -656,7 +661,7 @@ async fn rollover(
         "Taker's latest event-id does not match given event-id"
     );
     assert_eq!(
-        oracle_data.announcement().id,
+        oracle_data.announcements().last().unwrap().id,
         taker_cfd
             .aggregated()
             .latest_dlc()
@@ -672,7 +677,7 @@ async fn maker_rejects_rollover_of_open_cfd() {
     let _guard = init_tracing();
     let oracle_data = OliviaData::example_0();
     let (mut maker, mut taker, order_id, _) =
-        start_from_open_cfd_state(oracle_data.announcement(), Position::Short).await;
+        start_from_open_cfd_state(oracle_data.announcements(), Position::Short).await;
 
     let is_accepting_rollovers = false;
     maker
@@ -692,7 +697,7 @@ async fn maker_rejects_rollover_of_open_cfd() {
 async fn maker_rejects_collab_settlement_after_commit_finality() {
     let _guard = init_tracing();
     let (mut maker, mut taker, order_id, _) =
-        start_from_open_cfd_state(OliviaData::example_0().announcement(), Position::Short).await;
+        start_from_open_cfd_state(OliviaData::example_0().announcements(), Position::Short).await;
     taker.mocks.mock_latest_quote(Some(dummy_quote())).await;
     maker.mocks.mock_latest_quote(Some(dummy_quote())).await;
     next_with(taker.quote_feed(), |q| q).await.unwrap(); // if quote is available on feed, it propagated through the system
@@ -721,7 +726,7 @@ async fn maker_rejects_collab_settlement_after_commit_finality() {
 async fn maker_accepts_collab_settlement_after_commit_finality() {
     let _guard = init_tracing();
     let (mut maker, mut taker, order_id, _) =
-        start_from_open_cfd_state(OliviaData::example_0().announcement(), Position::Short).await;
+        start_from_open_cfd_state(OliviaData::example_0().announcements(), Position::Short).await;
     taker.mocks.mock_latest_quote(Some(dummy_quote())).await;
     maker.mocks.mock_latest_quote(Some(dummy_quote())).await;
     next_with(taker.quote_feed(), |q| q).await.unwrap(); // if quote is available on feed, it propagated through the system
@@ -751,7 +756,7 @@ async fn open_cfd_is_refunded() {
     let _guard = init_tracing();
     let oracle_data = OliviaData::example_0();
     let (mut maker, mut taker, order_id, _) =
-        start_from_open_cfd_state(oracle_data.announcement(), Position::Short).await;
+        start_from_open_cfd_state(oracle_data.announcements(), Position::Short).await;
     confirm!(commit transaction, order_id, maker, taker);
 
     sleep(Duration::from_secs(5)).await; // need to wait a bit until both transition
@@ -957,7 +962,7 @@ impl FeeStructure {
 /// For convenience, returns also OrderId of the opened Cfd.
 /// `announcement` is used during Cfd's creation.
 async fn start_from_open_cfd_state(
-    announcement: olivia::Announcement,
+    announcements: Vec<olivia::Announcement>,
     position_maker: Position,
 ) -> (Maker, Taker, OrderId, FeeStructure) {
     let mut maker = Maker::start(&MakerConfig::default()).await;
@@ -991,11 +996,11 @@ async fn start_from_open_cfd_state(
 
     taker
         .mocks
-        .mock_oracle_announcement_with(vec![announcement.clone()])
+        .mock_oracle_announcement_with(announcements.clone())
         .await;
     maker
         .mocks
-        .mock_oracle_announcement_with(vec![announcement])
+        .mock_oracle_announcement_with(announcements)
         .await;
 
     let order_to_take = match position_maker {

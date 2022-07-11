@@ -1,5 +1,5 @@
-use crate::protocol::*;
-use crate::PROTOCOL;
+use crate::v_2_0_0;
+use crate::v_2_0_0::protocol::*;
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -79,7 +79,10 @@ impl<E, O> Actor<E, O> {
     async fn open_substream(&self, peer_id: PeerId) -> Result<Substream> {
         Ok(self
             .endpoint
-            .send(OpenSubstream::single_protocol(peer_id.inner(), PROTOCOL))
+            .send(OpenSubstream::single_protocol(
+                peer_id.inner(),
+                v_2_0_0::PROTOCOL,
+            ))
             .await
             .context("Endpoint is disconnected")
             .context("Failed to open substream")??)
@@ -153,7 +156,7 @@ where
                     {
                         Decision::Confirm(Confirm {
                             order_id,
-                            oracle_event_id,
+                            oracle_event_ids,
                             tx_fee_rate,
                             funding_rate,
                             complete_fee,
@@ -163,15 +166,18 @@ where
                                     cfd.handle_rollover_accepted_taker(
                                         tx_fee_rate,
                                         funding_rate,
+                                        &oracle_event_ids,
                                         from_settlement_event_id,
                                     )
                                 })
                                 .await?;
 
-                            let announcement = oracle
-                                .get_announcements(vec![oracle_event_id])
+                            let announcements = oracle
+                                .get_announcements(oracle_event_ids)
                                 .await
                                 .context("Failed to get announcement")?;
+                            let settlement_event_id =
+                                announcements.last().context("Empty to_event_ids")?.id;
 
                             tracing::info!(%order_id, "Rollover proposal got accepted");
 
@@ -225,7 +231,7 @@ where
                             let own_cfd_txs = build_own_cfd_transactions(
                                 &dlc,
                                 rollover_params,
-                                &announcement[0],
+                                announcements.clone(),
                                 oracle_pk,
                                 our_position,
                                 n_payouts,
@@ -259,7 +265,6 @@ where
                             let commit_desc = build_commit_descriptor(punish_params);
                             let (cets, refund_tx) = build_and_verify_cets_and_refund(
                                 &dlc,
-                                &announcement[0],
                                 oracle_pk,
                                 publish_pk,
                                 our_role,
@@ -321,7 +326,7 @@ where
                                 maker_lock_amount: dlc.maker_lock_amount,
                                 taker_lock_amount: dlc.taker_lock_amount,
                                 revoked_commit,
-                                settlement_event_id: announcement[0].id,
+                                settlement_event_id,
                                 refund_timelock: rollover_params.refund_timelock,
                             };
 

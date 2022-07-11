@@ -166,9 +166,18 @@ impl Actor {
                     Position::Short => short_funding_rate,
                 };
 
-                let (event, params, dlc, position, event_id) =
+                let (event, params, dlc, position, to_event_ids) =
                     cfd.accept_rollover_proposal(tx_fee_rate, funding_rate, None, self.version)?;
-                Ok((event, params, dlc, position, event_id, funding_rate))
+                let settlement_event_id = *to_event_ids.last().context("Empty to_event_ids")?;
+
+                Ok((
+                    event,
+                    params,
+                    dlc,
+                    position,
+                    settlement_event_id,
+                    funding_rate,
+                ))
             })
             .await?;
 

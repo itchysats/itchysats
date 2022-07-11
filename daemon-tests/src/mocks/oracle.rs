@@ -46,7 +46,7 @@ impl OracleActor {
             .ok_or(oracle::NoAnnouncement(msg.0[0]))
     }
 
-    async fn handle(&mut self, _msg: oracle::MonitorAttestation) {}
+    async fn handle(&mut self, _msg: oracle::MonitorAttestations) {}
 
     async fn handle(&mut self, _msg: oracle::SyncAnnouncements) {}
 
@@ -85,7 +85,9 @@ pub fn dummy_wrong_attestation() -> oracle::Attestation {
         id: _,
         price,
         scalars,
-    } = OliviaData::example_0().attestation().into_inner();
+    } = OliviaData::example_0().attestations()[0]
+        .clone()
+        .into_inner();
 
     oracle::Attestation::new(olivia::Attestation {
         id: BitMexPriceEventId::with_20_digits(OffsetDateTime::now_utc()),

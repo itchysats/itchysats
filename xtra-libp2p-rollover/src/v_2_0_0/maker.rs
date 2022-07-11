@@ -1,4 +1,4 @@
-use crate::protocol::*;
+use crate::v_2_0_0::protocol::*;
 use anyhow::Context;
 use async_trait::async_trait;
 use asynchronous_codec::Framed;
@@ -192,14 +192,14 @@ where
                         .await
                         .context("Failed to get rates")?;
 
-                    let (rollover_params, dlc, position, oracle_event_id, funding_rate) = executor
+                    let (rollover_params, dlc, position, oracle_event_ids, funding_rate) = executor
                         .execute(order_id, |cfd| {
                             let funding_rate = match cfd.position() {
                                 Position::Long => funding_rate_long,
                                 Position::Short => funding_rate_short,
                             };
 
-                            let (event, params, dlc, position, oracle_event_id) = cfd
+                            let (event, params, dlc, position, oracle_event_ids) = cfd
                                 .accept_rollover_proposal(
                                     tx_fee_rate,
                                     funding_rate,
@@ -207,7 +207,7 @@ where
                                     RolloverVersion::V3,
                                 )?;
 
-                            Ok((event, params, dlc, position, oracle_event_id, funding_rate))
+                            Ok((event, params, dlc, position, oracle_event_ids, funding_rate))
                         })
                         .await?;
 
@@ -219,7 +219,7 @@ where
                     framed
                         .send(ListenerMessage::Decision(Decision::Confirm(Confirm {
                             order_id,
-                            oracle_event_id,
+                            oracle_event_ids: oracle_event_ids.clone(),
                             tx_fee_rate,
                             funding_rate,
                             complete_fee: complete_fee.into(),
@@ -227,10 +227,11 @@ where
                         .await
                         .context("Failed to send rollover confirmation message")?;
 
-                    let announcement = oracle
-                        .get_announcements(vec![oracle_event_id])
+                    let announcements = oracle
+                        .get_announcements(oracle_event_ids)
                         .await
                         .context("Failed to get announcement")?;
+                    let settlement_event_id = announcements.last().context("Empty to_event_ids")?.id;
 
                     let funding_fee = *rollover_params.funding_fee();
 
@@ -272,7 +273,7 @@ where
                     let own_cfd_txs = build_own_cfd_transactions(
                         &dlc,
                         rollover_params,
-                        &announcement[0],
+                        announcements.clone(),
                         oracle_pk,
                         our_position,
                         n_payouts,
@@ -301,7 +302,6 @@ where
                     let commit_desc = build_commit_descriptor(punish_params);
                     let (cets, refund_tx) = build_and_verify_cets_and_refund(
                         &dlc,
-                        &announcement[0],
                         oracle_pk,
                         publish_pk,
                         our_role,
@@ -355,7 +355,7 @@ where
                         maker_lock_amount: dlc.maker_lock_amount,
                         taker_lock_amount: dlc.taker_lock_amount,
                         revoked_commit,
-                        settlement_event_id: announcement[0].id,
+                        settlement_event_id,
                         refund_timelock: rollover_params.refund_timelock,
                     };
 

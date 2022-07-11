@@ -1,5 +1,2 @@
-pub mod maker;
-pub mod protocol;
-pub mod taker;
-
-pub const PROTOCOL: &str = "/itchysats/rollover/1.0.0";
+pub mod v_1_0_0;
+pub mod v_2_0_0;

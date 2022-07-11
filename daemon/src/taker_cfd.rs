@@ -169,7 +169,7 @@ where
     O: xtra::Handler<
             oracle::GetAnnouncements,
             Return = Result<Vec<olivia::Announcement>, oracle::NoAnnouncement>,
-        > + xtra::Handler<oracle::MonitorAttestation>,
+        > + xtra::Handler<oracle::MonitorAttestations>,
     W: xtra::Handler<wallet::BuildPartyParams, Return = Result<PartyParams>>
         + xtra::Handler<wallet::Sign, Return = Result<PartiallySignedTransaction>>,
 {

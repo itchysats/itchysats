@@ -1,4 +1,6 @@
+use anyhow::ensure;
 use anyhow::Context;
+use anyhow::Result;
 use bdk::bitcoin::XOnlyPublicKey;
 use conquer_once::Lazy;
 use maia_core::secp256k1_zkp::SecretKey;
@@ -135,6 +137,37 @@ impl From<Announcement> for maia_core::Announcement {
             nonce_pks: announcement.nonce_pks,
         }
     }
+}
+
+/// Produce a list of hourly events ranging from `start` to `end`, to
+/// the _next_ hour.
+pub fn hourly_events(
+    start: OffsetDateTime,
+    end: OffsetDateTime,
+) -> Result<Vec<BitMexPriceEventId>> {
+    let start_adjusted = ceil_to_next_hour(start);
+    let end_adjusted = ceil_to_next_hour(end);
+    let announcements = spaced_events(start_adjusted, end_adjusted, Duration::HOUR)?;
+
+    Ok(announcements)
+}
+
+/// Produce an inclusive range of events going from `start` to `end`.
+/// The space between each event is defined by the argument
+/// `interval`.
+pub fn spaced_events(
+    start: OffsetDateTime,
+    end: OffsetDateTime,
+    interval: Duration,
+) -> Result<Vec<BitMexPriceEventId>> {
+    ensure!(end > start, "end must be later than start");
+
+    Ok((start.unix_timestamp()..=end.unix_timestamp())
+        .step_by(interval.whole_seconds() as usize)
+        .map(OffsetDateTime::from_unix_timestamp)
+        .map(Result::unwrap) // roundtrip should work
+        .map(BitMexPriceEventId::with_20_digits)
+        .collect())
 }
 
 pub fn next_announcement_after(timestamp: OffsetDateTime) -> BitMexPriceEventId {
@@ -420,6 +453,7 @@ mod olivia_api {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use itertools::Itertools;
     use time::macros::datetime;
 
     #[test]
@@ -479,5 +513,96 @@ mod tests {
             event_id.to_string(),
             "/x/BitMEX/BXBT/2021-09-24T00:00:00.price?n=20"
         );
+    }
+
+    #[test]
+    fn range_of_24_hourly_events() {
+        let actual = hourly_events(
+            datetime!(2022-07-05 23:40:00).assume_utc(),
+            datetime!(2022-07-06 23:40:00).assume_utc(),
+        )
+        .unwrap()
+        .iter()
+        .map(|event| event.timestamp)
+        .collect_vec();
+
+        let expected = vec![
+            datetime!(2022-07-06 00:00:00).assume_utc(),
+            datetime!(2022-07-06 01:00:00).assume_utc(),
+            datetime!(2022-07-06 02:00:00).assume_utc(),
+            datetime!(2022-07-06 03:00:00).assume_utc(),
+            datetime!(2022-07-06 04:00:00).assume_utc(),
+            datetime!(2022-07-06 05:00:00).assume_utc(),
+            datetime!(2022-07-06 06:00:00).assume_utc(),
+            datetime!(2022-07-06 07:00:00).assume_utc(),
+            datetime!(2022-07-06 08:00:00).assume_utc(),
+            datetime!(2022-07-06 09:00:00).assume_utc(),
+            datetime!(2022-07-06 10:00:00).assume_utc(),
+            datetime!(2022-07-06 11:00:00).assume_utc(),
+            datetime!(2022-07-06 12:00:00).assume_utc(),
+            datetime!(2022-07-06 13:00:00).assume_utc(),
+            datetime!(2022-07-06 14:00:00).assume_utc(),
+            datetime!(2022-07-06 15:00:00).assume_utc(),
+            datetime!(2022-07-06 16:00:00).assume_utc(),
+            datetime!(2022-07-06 17:00:00).assume_utc(),
+            datetime!(2022-07-06 18:00:00).assume_utc(),
+            datetime!(2022-07-06 19:00:00).assume_utc(),
+            datetime!(2022-07-06 20:00:00).assume_utc(),
+            datetime!(2022-07-06 21:00:00).assume_utc(),
+            datetime!(2022-07-06 22:00:00).assume_utc(),
+            datetime!(2022-07-06 23:00:00).assume_utc(),
+            datetime!(2022-07-07 00:00:00).assume_utc(),
+        ];
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn range_of_30_events_per_minute() {
+        let actual = spaced_events(
+            datetime!(2022-07-05 00:00:00).assume_utc(),
+            datetime!(2022-07-05 00:30:00).assume_utc(),
+            Duration::MINUTE,
+        )
+        .unwrap()
+        .iter()
+        .map(|event| event.timestamp)
+        .collect_vec();
+
+        let expected = vec![
+            datetime!(2022-07-05 00:00:00).assume_utc(),
+            datetime!(2022-07-05 00:01:00).assume_utc(),
+            datetime!(2022-07-05 00:02:00).assume_utc(),
+            datetime!(2022-07-05 00:03:00).assume_utc(),
+            datetime!(2022-07-05 00:04:00).assume_utc(),
+            datetime!(2022-07-05 00:05:00).assume_utc(),
+            datetime!(2022-07-05 00:06:00).assume_utc(),
+            datetime!(2022-07-05 00:07:00).assume_utc(),
+            datetime!(2022-07-05 00:08:00).assume_utc(),
+            datetime!(2022-07-05 00:09:00).assume_utc(),
+            datetime!(2022-07-05 00:10:00).assume_utc(),
+            datetime!(2022-07-05 00:11:00).assume_utc(),
+            datetime!(2022-07-05 00:12:00).assume_utc(),
+            datetime!(2022-07-05 00:13:00).assume_utc(),
+            datetime!(2022-07-05 00:14:00).assume_utc(),
+            datetime!(2022-07-05 00:15:00).assume_utc(),
+            datetime!(2022-07-05 00:16:00).assume_utc(),
+            datetime!(2022-07-05 00:17:00).assume_utc(),
+            datetime!(2022-07-05 00:18:00).assume_utc(),
+            datetime!(2022-07-05 00:19:00).assume_utc(),
+            datetime!(2022-07-05 00:20:00).assume_utc(),
+            datetime!(2022-07-05 00:21:00).assume_utc(),
+            datetime!(2022-07-05 00:22:00).assume_utc(),
+            datetime!(2022-07-05 00:23:00).assume_utc(),
+            datetime!(2022-07-05 00:24:00).assume_utc(),
+            datetime!(2022-07-05 00:25:00).assume_utc(),
+            datetime!(2022-07-05 00:26:00).assume_utc(),
+            datetime!(2022-07-05 00:27:00).assume_utc(),
+            datetime!(2022-07-05 00:28:00).assume_utc(),
+            datetime!(2022-07-05 00:29:00).assume_utc(),
+            datetime!(2022-07-05 00:30:00).assume_utc(),
+        ];
+
+        assert_eq!(expected, actual);
     }
 }

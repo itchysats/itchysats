@@ -60,7 +60,7 @@ impl Mocks {
     }
 
     pub async fn mock_oracle_announcement(&mut self) {
-        self.mock_oracle_announcement_with(vec![OliviaData::example_0().announcement()])
+        self.mock_oracle_announcement_with(OliviaData::example_0().announcements())
             .await;
     }
 
