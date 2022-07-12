@@ -1,14 +1,10 @@
-use crate::shared_protocol::format_expect_msg_within;
-use crate::shared_protocol::verify_adaptor_signature;
-use crate::shared_protocol::verify_cets;
-use crate::shared_protocol::verify_signature;
-use crate::transaction_ext::TransactionExt;
 use crate::wallet;
 use crate::wire::Msg0;
 use crate::wire::Msg1;
 use crate::wire::Msg2;
 use crate::wire::Msg3;
 use crate::wire::SetupMsg;
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use bdk::bitcoin::util::psbt::PartiallySignedTransaction;
@@ -24,16 +20,20 @@ use maia::lock_descriptor;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::PartyParams;
 use maia_core::PunishParams;
-use model::calculate_payouts;
 use model::olivia;
+use model::shared_protocol::verify_adaptor_signature;
+use model::shared_protocol::verify_cets;
+use model::shared_protocol::verify_signature;
 use model::Cet;
 use model::Dlc;
+use model::OraclePayouts;
+use model::Payouts;
 use model::Position;
 use model::Role;
 use model::SetupParams;
+use model::TransactionExt;
 use model::CET_TIMELOCK;
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::time::Duration;
 use tokio_extras::FutureExt;
 use xtra::prelude::MessageChannel;
@@ -51,7 +51,7 @@ const CONTRACT_SETUP_MSG_TIMEOUT: Duration = Duration::from_secs(120);
 pub async fn new(
     mut sink: impl Sink<SetupMsg, Error = anyhow::Error> + Unpin,
     mut stream: impl Stream<Item = SetupMsg> + Unpin,
-    (oracle_pk, announcement): (XOnlyPublicKey, olivia::Announcement),
+    (oracle_pk, announcements): (XOnlyPublicKey, Vec<olivia::Announcement>),
     setup_params: SetupParams,
     build_party_params_channel: MessageChannel<wallet::BuildPartyParams, Result<PartyParams>>,
     sign_channel: MessageChannel<wallet::Sign, Result<PartiallySignedTransaction>>,
@@ -89,7 +89,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg0", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg0 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg0")?
         .try_into_msg0()?;
 
@@ -109,25 +114,24 @@ pub async fn new(
     let actual_margin = params.counterparty.lock_amount;
 
     if actual_margin != expected_margin {
-        anyhow::bail!(
+        bail!(
             "Amounts sent by counterparty don't add up, expected margin {expected_margin} but got {actual_margin}"
         )
     }
 
-    let settlement_event_id = announcement.id;
-    let payouts = HashMap::from_iter([(
-        announcement.into(),
-        calculate_payouts(
-            position,
-            role,
-            setup_params.price,
-            setup_params.quantity,
-            setup_params.long_leverage,
-            setup_params.short_leverage,
-            n_payouts,
-            setup_params.fee_account.settle(),
-        )?,
-    )]);
+    let settlement_event_id = announcements.last().context("Empty announcements")?.id;
+
+    let payouts = Payouts::new(
+        position,
+        role,
+        setup_params.price,
+        setup_params.quantity,
+        setup_params.long_leverage,
+        setup_params.short_leverage,
+        n_payouts,
+        setup_params.fee_account.settle(),
+    )?;
+    let payouts_per_event = OraclePayouts::new(payouts, announcements)?;
 
     let own_cfd_txs = tokio::task::spawn_blocking({
         let maker_params = params.maker().clone();
@@ -141,7 +145,7 @@ pub async fn new(
                 (taker_params, taker_punish),
                 oracle_pk,
                 (CET_TIMELOCK, setup_params.refund_timelock),
-                payouts,
+                payouts_per_event.into(),
                 sk,
                 setup_params.tx_fee_rate.to_u32(),
             )
@@ -160,7 +164,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg1", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg1 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg1")?
         .try_into_msg1()?;
 
@@ -205,16 +214,24 @@ pub async fn new(
             .cloned()
             .context("Expect event to exist in msg")?;
 
-        verify_cets(
-            (oracle_pk, own_grouped_cets.event.nonce_pks.clone()),
-            params.counterparty.clone(),
-            own_grouped_cets.cets,
-            counterparty_cets,
-            commit_desc.clone(),
-            commit_amount,
-        )
-        .await
-        .context("CET signatures don't verify")?;
+        tokio::task::spawn_blocking({
+            let commit_desc = commit_desc.clone();
+            let params_counterparty = params.counterparty.clone();
+            move || {
+                verify_cets(
+                    (oracle_pk, own_grouped_cets.event.nonce_pks.clone()),
+                    params_counterparty,
+                    own_grouped_cets.cets,
+                    counterparty_cets,
+                    commit_desc,
+                    commit_amount,
+                )
+                .context("CET signatures don't verify")?;
+
+                anyhow::Ok(())
+            }
+        })
+        .await??;
     }
 
     let lock_tx = own_cfd_txs.lock;
@@ -245,7 +262,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg2", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg2 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg2")?
         .try_into_msg2()?;
     signed_lock_tx
@@ -326,7 +348,12 @@ pub async fn new(
         .next()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg3", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg3 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .context("Empty stream instead of Msg3")?
         .try_into_msg3()?;
 

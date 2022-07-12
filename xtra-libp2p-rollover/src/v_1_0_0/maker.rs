@@ -1,10 +1,5 @@
-use crate::command;
-use crate::oracle;
-use crate::oracle::NoAnnouncement;
-use crate::rollover::protocol::*;
-use crate::shared_protocol::format_expect_msg_within;
+use crate::v_1_0_0::protocol::*;
 use anyhow::Context;
-use anyhow::Result;
 use async_trait::async_trait;
 use asynchronous_codec::Framed;
 use asynchronous_codec::JsonCodec;
@@ -13,76 +8,85 @@ use futures::SinkExt;
 use futures::StreamExt;
 use libp2p_core::PeerId;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
-use model::olivia;
-use model::olivia::BitMexPriceEventId;
 use model::Dlc;
-use model::FundingRate;
+use model::ExecuteOnCfd;
 use model::OrderId;
 use model::Position;
 use model::Role;
 use model::RolloverVersion;
-use model::TxFeeRate;
 use std::collections::HashMap;
 use tokio_extras::FutureExt;
 use tokio_extras::Tasks;
-use xtra::message_channel::MessageChannel;
 use xtra_libp2p::NewInboundSubstream;
 use xtra_libp2p::Substream;
 use xtra_productivity::xtra_productivity;
-
-use super::protocol;
-
-type ListenerConnection = (
-    Framed<Substream, JsonCodec<ListenerMessage, DialerMessage>>,
-    PeerId,
-    (BitMexPriceEventId, model::CompleteFee),
-);
 
 /// Permanent actor to handle incoming substreams for the `/itchysats/rollover/1.0.0`
 /// protocol.
 ///
 /// There is only one instance of this actor for all connections, meaning we must always spawn a
 /// task whenever we interact with a substream to not block the execution of other connections.
-pub struct Actor {
+pub struct Actor<E, O, R> {
     protocol_tasks: HashMap<OrderId, Tasks>,
     oracle_pk: XOnlyPublicKey,
-    get_announcement:
-        MessageChannel<oracle::GetAnnouncement, Result<olivia::Announcement, NoAnnouncement>>,
+    oracle: O,
     n_payouts: usize,
-    pending_protocols: HashMap<OrderId, ListenerConnection>,
-    executor: command::Executor,
+    executor: E,
+    rates: R,
+    is_accepting_rollovers: bool,
 }
 
-impl Actor {
+impl<E, O, R> Actor<E, O, R> {
     pub fn new(
-        executor: command::Executor,
+        executor: E,
         oracle_pk: XOnlyPublicKey,
-        get_announcement: MessageChannel<
-            oracle::GetAnnouncement,
-            Result<olivia::Announcement, NoAnnouncement>,
-        >,
+        oracle: O,
+        rates: R,
         n_payouts: usize,
     ) -> Self {
         Self {
             protocol_tasks: HashMap::default(),
             oracle_pk,
-            get_announcement,
+            oracle,
             n_payouts,
-            pending_protocols: HashMap::default(),
             executor,
+            rates,
+            is_accepting_rollovers: true,
         }
     }
 }
 
 #[async_trait]
-impl xtra::Actor for Actor {
+impl<E, O, R> xtra::Actor for Actor<E, O, R>
+where
+    E: Send + Sync + 'static,
+    O: Send + Sync + 'static,
+    R: Send + Sync + 'static,
+{
     type Stop = ();
 
     async fn stopped(self) -> Self::Stop {}
 }
 
 #[xtra_productivity]
-impl Actor {
+impl<E, O, R> Actor<E, O, R>
+where
+    E: ExecuteOnCfd + Clone + Send + Sync + 'static,
+    O: GetAnnouncements + Clone + Send + Sync + 'static,
+    R: GetRates + Clone + Send + Sync + 'static,
+{
+    async fn handle(&mut self, msg: UpdateConfiguration) {
+        self.is_accepting_rollovers = msg.is_accepting_rollovers;
+    }
+}
+
+#[xtra_productivity]
+impl<E, O, R> Actor<E, O, R>
+where
+    E: ExecuteOnCfd + Clone + Send + Sync + 'static,
+    O: GetAnnouncements + Clone + Send + Sync + 'static,
+    R: GetRates + Clone + Send + Sync + 'static,
+{
     async fn handle(&mut self, msg: NewInboundSubstream, ctx: &mut xtra::Context<Self>) {
         let NewInboundSubstream { peer, stream } = msg;
         let address = ctx.address().expect("we are alive");
@@ -115,14 +119,11 @@ impl Actor {
             },
         );
     }
-}
 
-#[xtra_productivity]
-impl Actor {
     async fn handle(&mut self, msg: ProposeReceived) {
         let ProposeReceived {
             propose,
-            framed,
+            mut framed,
             peer,
         } = msg;
         let order_id = propose.order_id;
@@ -148,50 +149,61 @@ impl Actor {
             }
         };
 
-        // In case we fail to accept/reject some proposals might never get cleaned up. Given that
-        // the taker will retry this should not do much harm because we will replace the proposal
-        // with a new one. This is acceptable for now.
-        self.pending_protocols
-            .insert(order_id, (framed, peer, (from_event_id, from_complete_fee)));
-    }
+        if !self.is_accepting_rollovers {
+            emit_rejected(order_id, &self.executor).await;
 
-    async fn handle(&mut self, msg: Accept) -> Result<()> {
-        let Accept {
-            order_id,
-            tx_fee_rate,
-            long_funding_rate,
-            short_funding_rate,
-        } = msg;
+            let mut tasks = Tasks::default();
+            tasks.add_fallible(
+                async move {
+                    framed
+                        .send(ListenerMessage::Decision(Decision::Reject(Reject {
+                            order_id,
+                        })))
+                        .await
+                },
+                move |e| async move {
+                    tracing::debug!(%order_id, "Failed to send reject rollover to the taker: {e:#}")
+                },
+            );
+            self.protocol_tasks.insert(order_id, tasks);
+
+            return;
+        }
 
         fn next_rollover_span(parent: &tracing::Span) -> tracing::Span {
             tracing::debug_span!(parent: parent, "next rollover message")
         }
 
-        let (mut framed, _, from_params) =
-            self.pending_protocols.remove(&order_id).with_context(|| {
-                format!("No active protocol for {order_id} when accepting rollover")
-            })?;
-
         let mut tasks = Tasks::default();
         tasks.add_fallible(
             {
                 let executor = self.executor.clone();
-                let get_announcement = self.get_announcement.clone();
+                let oracle = self.oracle.clone();
+                let rates =  self.rates.clone();
                 let oracle_pk = self.oracle_pk;
                 let n_payouts = self.n_payouts;
                 async move {
+                    let Rates {
+                        funding_rate_long,
+                        funding_rate_short,
+                        tx_fee_rate,
+                    } = rates
+                        .get_rates()
+                        .await
+                        .context("Failed to get rates")?;
+
                     let (rollover_params, dlc, position, oracle_event_id, funding_rate) = executor
                         .execute(order_id, |cfd| {
                             let funding_rate = match cfd.position() {
-                                Position::Long => long_funding_rate,
-                                Position::Short => short_funding_rate,
+                                Position::Long => funding_rate_long,
+                                Position::Short => funding_rate_short,
                             };
 
                             let (event, params, dlc, position, oracle_event_id) = cfd
-                                .accept_rollover_proposal(
+                                .accept_rollover_proposal_single_event(
                                     tx_fee_rate,
                                     funding_rate,
-                                    Some(from_params),
+                                    Some((from_event_id, from_complete_fee)),
                                     RolloverVersion::V3,
                                 )?;
 
@@ -215,10 +227,9 @@ impl Actor {
                         .await
                         .context("Failed to send rollover confirmation message")?;
 
-                    let announcement = get_announcement
-                        .send(oracle::GetAnnouncement(oracle_event_id))
+                    let announcement = oracle
+                        .get_announcements(vec![oracle_event_id])
                         .await
-                        .context("Oracle actor disconnected")?
                         .context("Failed to get announcement")?;
 
                     let funding_fee = *rollover_params.funding_fee();
@@ -233,7 +244,7 @@ impl Actor {
                         .next()
                         .timeout(ROLLOVER_MSG_TIMEOUT, next_rollover_span)
                         .await
-                        .with_context(|| format_expect_msg_within("Msg0", ROLLOVER_MSG_TIMEOUT))?
+                        .with_context(|| format!("Expected Msg0 within {} seconds", ROLLOVER_MSG_TIMEOUT.as_secs()))?
                         .context("Empty stream instead of Msg0")?
                         .context("Unable to decode dialer Msg0")?
                         .into_rollover_msg()?
@@ -261,7 +272,7 @@ impl Actor {
                     let own_cfd_txs = build_own_cfd_transactions(
                         &dlc,
                         rollover_params,
-                        &announcement,
+                        &announcement[0],
                         oracle_pk,
                         our_position,
                         n_payouts,
@@ -274,7 +285,7 @@ impl Actor {
                         .next()
                         .timeout(ROLLOVER_MSG_TIMEOUT, next_rollover_span)
                         .await
-                        .with_context(|| format_expect_msg_within("Msg1", ROLLOVER_MSG_TIMEOUT))?
+                        .with_context(|| format!("Expected Msg1 within {} seconds", ROLLOVER_MSG_TIMEOUT.as_secs()))?
                         .context("Empty stream instead of Msg1")?
                         .context("Unable to decode dialer Msg1")?
                         .into_rollover_msg()?
@@ -290,7 +301,7 @@ impl Actor {
                     let commit_desc = build_commit_descriptor(punish_params);
                     let (cets, refund_tx) = build_and_verify_cets_and_refund(
                         &dlc,
-                        &announcement,
+                        &announcement[0],
                         oracle_pk,
                         publish_pk,
                         our_role,
@@ -304,7 +315,7 @@ impl Actor {
                         .next()
                         .timeout(ROLLOVER_MSG_TIMEOUT, next_rollover_span)
                         .await
-                        .with_context(|| format_expect_msg_within("Msg2", ROLLOVER_MSG_TIMEOUT))?
+                        .with_context(|| format!("Expected Msg2 within {} seconds", ROLLOVER_MSG_TIMEOUT.as_secs()))?
                         .context("Empty stream instead of Msg2")?
                         .context("Unable to decode dialer Msg2")?
                         .into_rollover_msg()?
@@ -344,7 +355,7 @@ impl Actor {
                         maker_lock_amount: dlc.maker_lock_amount,
                         taker_lock_amount: dlc.taker_lock_amount,
                         revoked_commit,
-                        settlement_event_id: announcement.id,
+                        settlement_event_id: announcement[0].id,
                         refund_timelock: rollover_params.refund_timelock,
                     };
 
@@ -361,35 +372,19 @@ impl Actor {
             },
         );
         self.protocol_tasks.insert(order_id, tasks);
-
-        Ok(())
     }
+}
 
-    async fn handle(&mut self, msg: Reject) -> Result<()> {
-        let Reject { order_id } = msg;
+#[derive(Clone, Copy)]
+pub struct UpdateConfiguration {
+    is_accepting_rollovers: bool,
+}
 
-        let (mut framed, ..) = self.pending_protocols.remove(&order_id).with_context(|| {
-            format!("No active protocol for {order_id} when rejecting rollover")
-        })?;
-
-        emit_rejected(order_id, &self.executor).await;
-
-        let mut tasks = Tasks::default();
-        tasks.add_fallible(
-            async move {
-                framed
-                    .send(ListenerMessage::Decision(Decision::Reject(
-                        protocol::Reject { order_id },
-                    )))
-                    .await
-            },
-            move |e| async move {
-                tracing::debug!(%order_id, "Failed to send reject rollover to the taker: {e:#}")
-            },
-        );
-        self.protocol_tasks.insert(order_id, tasks);
-
-        Ok(())
+impl UpdateConfiguration {
+    pub fn new(is_accepting_rollovers: bool) -> Self {
+        Self {
+            is_accepting_rollovers,
+        }
     }
 }
 
@@ -397,19 +392,4 @@ struct ProposeReceived {
     propose: Propose,
     framed: Framed<Substream, JsonCodec<ListenerMessage, DialerMessage>>,
     peer: PeerId,
-}
-
-/// Upon accepting Rollover maker sends the current estimated transaction fee and
-/// funding rate
-#[derive(Clone, Copy, Debug)]
-pub struct Accept {
-    pub order_id: OrderId,
-    pub tx_fee_rate: TxFeeRate,
-    pub long_funding_rate: FundingRate,
-    pub short_funding_rate: FundingRate,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Reject {
-    pub order_id: OrderId,
 }

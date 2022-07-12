@@ -570,14 +570,14 @@ pub fn init_tracing() -> DefaultGuard {
 pub async fn mock_oracle_announcements(
     maker: &mut Maker,
     taker: &mut Taker,
-    announcement: Announcement,
+    announcements: Vec<Announcement>,
 ) {
     taker
         .mocks
-        .mock_oracle_announcement_with(announcement.clone())
+        .mock_oracle_announcement_with(announcements.clone())
         .await;
     maker
         .mocks
-        .mock_oracle_announcement_with(announcement)
+        .mock_oracle_announcement_with(announcements)
         .await;
 }

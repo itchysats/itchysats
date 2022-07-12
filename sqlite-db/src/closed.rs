@@ -587,7 +587,7 @@ async fn insert_closed_cfd(conn: &mut Transaction<'_, Sqlite>, cfd: ClosedCfdInp
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert into closed_cfds");
+        bail!("failed to insert into closed_cfds");
     }
 
     Ok(())
@@ -690,7 +690,7 @@ async fn insert_collaborative_settlement(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert into collaborative_settlement_txs");
+        bail!("failed to insert into collaborative_settlement_txs");
     }
 
     Ok(())
@@ -735,7 +735,7 @@ async fn insert_cet_settlement(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert into closed_cets");
+        bail!("failed to insert into closed_cets");
     }
 
     Ok(())
@@ -777,7 +777,7 @@ async fn insert_refund_settlement(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert into closed_refund_txs");
+        bail!("failed to insert into closed_refund_txs");
     }
 
     Ok(())
@@ -810,7 +810,7 @@ async fn insert_commit_tx(
     .await?;
 
     if query_result.rows_affected() != 1 {
-        anyhow::bail!("failed to insert into closed_commit_txs");
+        bail!("failed to insert into closed_commit_txs");
     }
 
     Ok(())
@@ -937,7 +937,7 @@ async fn insert_event_log(
         .await?;
 
         if query_result.rows_affected() != 1 {
-            anyhow::bail!("failed to insert into event_log");
+            bail!("failed to insert into event_log");
         }
     }
 

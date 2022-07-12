@@ -1,4 +1,5 @@
 use crate::libp2p::PeerId;
+use anyhow::ensure;
 use anyhow::Context;
 use anyhow::Result;
 use bdk::bitcoin::Address;
@@ -30,13 +31,18 @@ mod contract_setup;
 pub mod hex_transaction;
 pub mod libp2p;
 pub mod olivia;
-pub mod payout_curve;
+mod payouts;
 mod rollover;
+pub mod shared_protocol;
+pub mod transaction_ext;
 
 pub use cfd::*;
 pub use contract_setup::SetupParams;
+pub use payouts::OraclePayouts;
+pub use payouts::Payouts;
 pub use rollover::RolloverParams;
 pub use rollover::Version as RolloverVersion;
+pub use transaction_ext::TransactionExt;
 
 /// The time-to-live of a CFD after it is first created or rolled
 /// over.
@@ -566,7 +572,7 @@ pub struct FundingRate(Decimal);
 
 impl FundingRate {
     pub fn new(rate: Decimal) -> Result<Self> {
-        anyhow::ensure!(
+        ensure!(
             rate.abs() <= Decimal::ONE,
             "Funding rate can't be higher than 100%"
         );

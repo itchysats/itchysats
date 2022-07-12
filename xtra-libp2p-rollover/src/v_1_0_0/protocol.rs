@@ -1,18 +1,14 @@
-use crate::bitcoin::secp256k1::SecretKey;
-use crate::bitcoin::PublicKey;
-use crate::command;
-use crate::shared_protocol::verify_adaptor_signature;
-use crate::shared_protocol::verify_cets;
-use crate::shared_protocol::verify_signature;
-use crate::transaction_ext::TransactionExt;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
+use async_trait::async_trait;
 use bdk::bitcoin::secp256k1::ecdsa::Signature;
+use bdk::bitcoin::secp256k1::SecretKey;
 use bdk::bitcoin::secp256k1::SECP256K1;
 use bdk::bitcoin::util::psbt::PartiallySignedTransaction;
 use bdk::bitcoin::Amount;
+use bdk::bitcoin::PublicKey;
 use bdk::bitcoin::Transaction;
 use bdk::bitcoin::Txid;
 use bdk::descriptor::Descriptor;
@@ -25,19 +21,24 @@ use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::Announcement;
 use maia_core::CfdTransactions;
 use maia_core::PartyParams;
-use model::calculate_payouts;
 use model::olivia;
 use model::olivia::BitMexPriceEventId;
+use model::shared_protocol::verify_adaptor_signature;
+use model::shared_protocol::verify_cets;
+use model::shared_protocol::verify_signature;
 use model::Cet;
 use model::Dlc;
+use model::ExecuteOnCfd;
 use model::FundingFee;
 use model::FundingRate;
 use model::OrderId;
+use model::Payouts;
 use model::Position;
 use model::RevokedCommit;
 use model::Role;
 use model::RolloverParams;
 use model::Timestamp;
+use model::TransactionExt;
 use model::TxFeeRate;
 use model::CET_TIMELOCK;
 use serde::Deserialize;
@@ -253,13 +254,15 @@ impl From<CompleteFee> for model::CompleteFee {
     }
 }
 
-pub(crate) async fn emit_completed(
+pub(crate) async fn emit_completed<E>(
     order_id: OrderId,
     dlc: Dlc,
     funding_fee: FundingFee,
     complete_fee: model::CompleteFee,
-    executor: &command::Executor,
-) {
+    executor: &E,
+) where
+    E: ExecuteOnCfd,
+{
     if let Err(e) = executor
         .execute(order_id, |cfd| {
             Ok(cfd.complete_rollover(dlc, funding_fee, Some(complete_fee)))
@@ -272,7 +275,10 @@ pub(crate) async fn emit_completed(
     tracing::info!(%order_id, "Rollover completed");
 }
 
-pub(crate) async fn emit_rejected(order_id: OrderId, executor: &command::Executor) {
+pub(crate) async fn emit_rejected<E>(order_id: OrderId, executor: &E)
+where
+    E: ExecuteOnCfd,
+{
     if let Err(e) = executor
         .execute(order_id, |cfd| {
             Ok(cfd.reject_rollover(anyhow!("maker decision")))
@@ -285,7 +291,10 @@ pub(crate) async fn emit_rejected(order_id: OrderId, executor: &command::Executo
     tracing::info!(%order_id, "Rollover rejected");
 }
 
-pub(crate) async fn emit_failed(order_id: OrderId, e: anyhow::Error, executor: &command::Executor) {
+pub(crate) async fn emit_failed<E>(order_id: OrderId, e: anyhow::Error, executor: &E)
+where
+    E: ExecuteOnCfd,
+{
     tracing::error!(%order_id, "Rollover failed: {e:#}");
 
     if let Err(e) = executor
@@ -376,7 +385,7 @@ pub(crate) async fn build_own_cfd_transactions(
             id: announcement.id.to_string(),
             nonce_pks: announcement.nonce_pks.clone(),
         },
-        calculate_payouts(
+        Payouts::new(
             our_position,
             punish_params.own_role,
             rollover_params.price,
@@ -385,7 +394,8 @@ pub(crate) async fn build_own_cfd_transactions(
             rollover_params.short_leverage,
             n_payouts,
             complete_fee,
-        )?,
+        )?
+        .settlement(),
     )]);
 
     // unsign lock tx because PartiallySignedTransaction needs an unsigned tx
@@ -498,7 +508,6 @@ pub(crate) async fn build_and_verify_cets_and_refund(
             commit_desc.clone(),
             commit_amount,
         )
-        .await
         .context("CET signatures don't verify")?;
     }
 
@@ -588,7 +597,7 @@ pub(crate) fn finalize_revoked_commits(
         ));
 
         if derived_rev_pk != dlc.revocation_pk_counterparty {
-            anyhow::bail!("Counterparty sent invalid revocation sk");
+            bail!("Counterparty sent invalid revocation sk");
         }
     }
 
@@ -605,4 +614,39 @@ pub(crate) fn finalize_revoked_commits(
     });
 
     Ok(revoked_commit)
+}
+
+#[async_trait]
+pub trait GetAnnouncements {
+    async fn get_announcements(
+        &self,
+        events: Vec<BitMexPriceEventId>,
+    ) -> Result<Vec<olivia::Announcement>>;
+}
+
+#[async_trait]
+pub trait GetRates {
+    async fn get_rates(&self) -> Result<Rates>;
+}
+
+/// Set of rates needed to accept rollover proposals.
+#[derive(Clone, Copy)]
+pub struct Rates {
+    pub(crate) funding_rate_long: FundingRate,
+    pub(crate) funding_rate_short: FundingRate,
+    pub(crate) tx_fee_rate: TxFeeRate,
+}
+
+impl Rates {
+    pub fn new(
+        long_funding_rate: FundingRate,
+        short_funding_rate: FundingRate,
+        tx_fee_rate: TxFeeRate,
+    ) -> Self {
+        Self {
+            funding_rate_long: long_funding_rate,
+            funding_rate_short: short_funding_rate,
+            tx_fee_rate,
+        }
+    }
 }

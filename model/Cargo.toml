@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1"
 bdk = { version = "0.19.0", default-features = false }
 conquer-once = "0.3"
 hex = "0.4"

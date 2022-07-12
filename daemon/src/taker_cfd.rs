@@ -167,9 +167,9 @@ impl<O, W> Actor<O, W> {
 impl<O, W> Actor<O, W>
 where
     O: xtra::Handler<
-            oracle::GetAnnouncement,
-            Return = Result<olivia::Announcement, oracle::NoAnnouncement>,
-        > + xtra::Handler<oracle::MonitorAttestation>,
+            oracle::GetAnnouncements,
+            Return = Result<Vec<olivia::Announcement>, oracle::NoAnnouncement>,
+        > + xtra::Handler<oracle::MonitorAttestations>,
     W: xtra::Handler<wallet::BuildPartyParams, Return = Result<PartyParams>>
         + xtra::Handler<wallet::Sign, Return = Result<PartiallySignedTransaction>>,
 {
@@ -235,7 +235,7 @@ where
         let price_event_id = order_to_take.oracle_event_id;
         let announcement = self
             .oracle_actor
-            .send(oracle::GetAnnouncement(price_event_id))
+            .send(oracle::GetAnnouncements(vec![price_event_id]))
             .await?
             .with_context(|| format!("Announcement {price_event_id} not found"))?;
 
@@ -248,7 +248,7 @@ where
                 cfd.taker_leverage(),
                 self.n_payouts,
             ),
-            (self.oracle_pk, announcement),
+            (self.oracle_pk, announcement[0].clone()),
             self.wallet.clone().into(),
             self.wallet.clone().into(),
             self.conn_actor.clone(),

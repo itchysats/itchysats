@@ -4,6 +4,7 @@ use crate::Connect;
 use crate::Endpoint;
 use crate::GetConnectionStats;
 use anyhow::anyhow;
+use anyhow::ensure;
 use anyhow::Result;
 use async_trait::async_trait;
 use libp2p_core::Multiaddr;
@@ -113,7 +114,7 @@ impl Actor {
         // Only check the connection again after it had enough time to be established
         tokio_extras::time::sleep(CONNECTION_TIMEOUT).await;
 
-        anyhow::ensure!(
+        ensure!(
             self.is_connection_established().await?,
             "No connection after dialing attempt",
         );

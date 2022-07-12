@@ -19,7 +19,7 @@ pub enum Version {
     /// This version can handle charging for "missed" rollovers, i.e. we calculate the hours to
     /// charge based on the oracle event timestamp of the last successful rollover.
     V2,
-    /// Version two of the rollover protocol
+    /// Version three of the rollover protocol
     ///
     /// This version calculates the time to extend the settlement time
     /// by using the `BitMexPriceEventId` of the settlement event

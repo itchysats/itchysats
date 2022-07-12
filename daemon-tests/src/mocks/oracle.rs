@@ -36,17 +36,17 @@ impl xtra::Actor for OracleActor {
 impl OracleActor {
     async fn handle(
         &mut self,
-        msg: oracle::GetAnnouncement,
-    ) -> Result<olivia::Announcement, oracle::NoAnnouncement> {
+        msg: oracle::GetAnnouncements,
+    ) -> Result<Vec<olivia::Announcement>, oracle::NoAnnouncement> {
         self.mock
             .lock()
             .await
-            .announcement
+            .announcements
             .clone()
-            .ok_or(oracle::NoAnnouncement(msg.0))
+            .ok_or(oracle::NoAnnouncement(msg.0[0]))
     }
 
-    async fn handle(&mut self, _msg: oracle::MonitorAttestation) {}
+    async fn handle(&mut self, _msg: oracle::MonitorAttestations) {}
 
     async fn handle(&mut self, _msg: oracle::SyncAnnouncements) {}
 
@@ -54,14 +54,14 @@ impl OracleActor {
 }
 pub struct MockOracle {
     executor: command::Executor,
-    announcement: Option<olivia::Announcement>,
+    announcements: Option<Vec<olivia::Announcement>>,
 }
 
 impl MockOracle {
     fn new(executor: command::Executor) -> Self {
         Self {
             executor,
-            announcement: None,
+            announcements: None,
         }
     }
 
@@ -72,8 +72,8 @@ impl MockOracle {
             .unwrap();
     }
 
-    pub fn set_announcement(&mut self, announcement: olivia::Announcement) {
-        self.announcement = Some(announcement);
+    pub fn set_announcements(&mut self, announcements: Vec<olivia::Announcement>) {
+        self.announcements = Some(announcements);
     }
 }
 
@@ -85,7 +85,9 @@ pub fn dummy_wrong_attestation() -> oracle::Attestation {
         id: _,
         price,
         scalars,
-    } = OliviaData::example_0().attestation().into_inner();
+    } = OliviaData::example_0().attestations()[0]
+        .clone()
+        .into_inner();
 
     oracle::Attestation::new(olivia::Attestation {
         id: BitMexPriceEventId::with_20_digits(OffsetDateTime::now_utc()),

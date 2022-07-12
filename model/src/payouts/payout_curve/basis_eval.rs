@@ -1,6 +1,6 @@
-use crate::payout_curve::csr_tools::CSR;
-use crate::payout_curve::utils::*;
-use crate::payout_curve::Error;
+use crate::payouts::payout_curve::csr_tools::CSR;
+use crate::payouts::payout_curve::utils::*;
+use crate::payouts::payout_curve::Error;
 use ndarray::prelude::*;
 use std::cmp::min;
 

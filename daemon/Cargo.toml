@@ -30,6 +30,7 @@ parse-display = "0.5.5"
 prometheus = { version = "0.13", default-features = false }
 rand = "0.6"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls-webpki-roots"] }
+rollover = { path = "../xtra-libp2p-rollover", package = "xtra-libp2p-rollover" }
 rust_decimal = { version = "1.25", features = ["serde-with-float"] }
 rust_decimal_macros = "1.25"
 semver = { version = "1.0.12", features = ["serde"] }
@@ -58,7 +59,6 @@ xtra_productivity = { version = "0.1.0", features = ["instrumentation"] }
 xtras = { path = "../xtras" }
 
 [dev-dependencies]
-pretty_assertions = "1"
 serde_test = "1"
 test-case = "2"
 time = { version = "0.3.11", features = ["std"] }

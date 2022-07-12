@@ -1,4 +1,3 @@
-use crate::transaction_ext::TransactionExt;
 use crate::wallet;
 use crate::wire::Msg0;
 use crate::wire::Msg1;
@@ -10,6 +9,7 @@ use crate::wire::RolloverMsg1;
 use crate::wire::RolloverMsg2;
 use crate::wire::RolloverMsg3;
 use crate::wire::SetupMsg;
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use bdk::bitcoin::secp256k1::ecdsa::Signature;
@@ -37,16 +37,17 @@ use maia_deprecated::create_cfd_transactions;
 use maia_deprecated::lock_descriptor;
 use maia_deprecated::renew_cfd_transactions;
 use maia_deprecated::spending_tx_sighash;
-use model::calculate_payouts;
 use model::olivia;
 use model::Cet;
 use model::CompleteFee;
 use model::Dlc;
+use model::Payouts;
 use model::Position;
 use model::RevokedCommit;
 use model::Role;
 use model::RolloverParams;
 use model::SetupParams;
+use model::TransactionExt;
 use model::CET_TIMELOCK;
 use std::collections::HashMap;
 use std::iter::FromIterator;
@@ -110,7 +111,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg0", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg0 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg0()?;
 
     tracing::info!("Exchanged setup parameters");
@@ -129,7 +135,7 @@ pub async fn new(
     let actual_margin = params.counterparty.lock_amount;
 
     if actual_margin != expected_margin {
-        anyhow::bail!(
+        bail!(
             "Amounts sent by counterparty don't add up, expected margin {expected_margin} but got {actual_margin}"
         )
     }
@@ -137,7 +143,7 @@ pub async fn new(
     let settlement_event_id = announcement.id;
     let payouts = HashMap::from_iter([(
         announcement.into(),
-        calculate_payouts(
+        Payouts::new(
             position,
             role,
             setup_params.price,
@@ -146,7 +152,8 @@ pub async fn new(
             setup_params.short_leverage,
             n_payouts,
             setup_params.fee_account.settle(),
-        )?,
+        )?
+        .settlement(),
     )]);
 
     let own_cfd_txs = tokio::task::spawn_blocking({
@@ -180,7 +187,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg1", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg1 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg1()?;
 
     tracing::info!("Exchanged CFD transactions");
@@ -264,7 +276,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg2", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg2 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg2()?;
     signed_lock_tx
         .combine(msg2.signed_lock)
@@ -344,7 +361,12 @@ pub async fn new(
         .select_next_some()
         .timeout(CONTRACT_SETUP_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg3", CONTRACT_SETUP_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg3 within {} seconds",
+                CONTRACT_SETUP_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg3()?;
 
     Ok(Dlc {
@@ -404,7 +426,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg0", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg0 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg0()?;
 
     let maker_lock_amount = dlc.maker_lock_amount;
@@ -414,7 +441,7 @@ pub async fn roll_over(
             id: announcement.id.to_string(),
             nonce_pks: announcement.nonce_pks.clone(),
         },
-        calculate_payouts(
+        Payouts::new(
             our_position,
             our_role,
             rollover_params.price,
@@ -423,7 +450,8 @@ pub async fn roll_over(
             rollover_params.short_leverage,
             n_payouts,
             complete_fee,
-        )?,
+        )?
+        .settlement(),
     )]);
 
     // unsign lock tx because PartiallySignedTransaction needs an unsigned tx
@@ -488,7 +516,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg1", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg1 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg1()?;
 
     let lock_amount = taker_lock_amount + maker_lock_amount;
@@ -629,7 +662,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg2", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg2 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg2()?;
     let revocation_sk_theirs = msg2.revocation_sk;
 
@@ -639,7 +677,7 @@ pub async fn roll_over(
         );
 
         if derived_rev_pk != dlc.revocation_pk_counterparty {
-            anyhow::bail!("Counterparty sent invalid revocation sk");
+            bail!("Counterparty sent invalid revocation sk");
         }
     }
 
@@ -666,7 +704,12 @@ pub async fn roll_over(
         .select_next_some()
         .timeout(ROLLOVER_MSG_TIMEOUT, stream_select_next_span)
         .await
-        .with_context(|| format_expect_msg_within("Msg3", ROLLOVER_MSG_TIMEOUT))?
+        .with_context(|| {
+            format!(
+                "Expected Msg3 within {} seconds",
+                ROLLOVER_MSG_TIMEOUT.as_secs()
+            )
+        })?
         .try_into_msg3()?;
 
     Ok(Dlc {
@@ -840,11 +883,4 @@ fn verify_cet_encsig(
         &bdk::bitcoin::PublicKey::new(adaptor_point),
         pk,
     )
-}
-
-/// Wrapper for the msg
-fn format_expect_msg_within(msg: &str, timeout: Duration) -> String {
-    let seconds = timeout.as_secs();
-
-    format!("Expected {msg} within {seconds} seconds")
 }

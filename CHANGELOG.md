@@ -13,11 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in [comit-network's fork](https://github.com/comit-network/xtra) internally. Xtra message handler metrics were also
   removed in favour of the new `instrumentation` feature combined with
   [Grafana Tempo's span metrics](https://grafana.com/docs/tempo/latest/server_side_metrics/span_metrics/).
+- Replace intermediate confirmation step in rollover protocol for the maker with a configurable flag which can be updated during runtime using the new `POST /rollover-config` endpoint.
+  Rollovers are accepted by default on startup.
 
 ### Added
 
 - Add new argument to the maker: `ignore-migration-errors`. If enabled, the maker will start if an error occurred when opening the database, if not, it will fail fast. This can come handy to prevent accidentally creating a new empty database in case database migration was unsuccessful.
 - New metrics: the maker tracks how many offers have been sent (`offer_messages_sent_total`) and the taker tracks how many offers have been received (`offer_messages_received_total`).
+- Add dynamic liquidation to the DLC, enabling the CFD to be unilaterally closed every hour by either party if the oracle attests to a price close to the ends of the payout curve's domain.
+  This is currently only active _after the first rollover_.
 
 ## [0.4.21] - 2022-06-27
 
