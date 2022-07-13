@@ -30,6 +30,7 @@ use xtras::SendAsyncSafe;
 mod util;
 
 #[tokio::test]
+#[ignore]
 async fn given_single_protocol_when_one_protocol_run_then_alice_handles_1000_bobs() {
     const BOBS: usize = 1000;
     const PROTOCOLS: usize = 1;
@@ -40,6 +41,7 @@ async fn given_single_protocol_when_one_protocol_run_then_alice_handles_1000_bob
 }
 
 #[tokio::test]
+#[ignore]
 async fn given_single_protocol_when_multiple_protocol_run_then_alice_handles_100_bobs_with_100_protocol_runs(
 ) {
     // Note: It can actually handle 1000 bobs x 1000 runs, but that takes significant time
@@ -53,6 +55,7 @@ async fn given_single_protocol_when_multiple_protocol_run_then_alice_handles_100
 }
 
 #[tokio::test]
+#[ignore]
 async fn given_multiple_protocol_when_one_protocol_run_then_alice_handles_1000_bobs() {
     const BOBS: usize = 1000;
     const PROTOCOLS: usize = BOBS; // One distinct protocol per Bob and distinct protocol handlers for each protocol on Alice
