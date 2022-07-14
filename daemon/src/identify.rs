@@ -1,18 +1,51 @@
+use crate::Environment;
+use std::collections::HashSet;
+
 pub mod dialer;
 pub mod listener;
 pub mod protocol;
 
 pub const PROTOCOL: &str = "/itchysats/id/1.0.0";
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PeerInfo {
+    pub wire_version: String,
+    pub daemon_version: String,
+    pub environment: Environment,
+    pub protocols: HashSet<String>,
+}
+
+impl TryFrom<protocol::IdentifyMsg> for PeerInfo {
+    type Error = ConversionError;
+
+    fn try_from(identity_msg: protocol::IdentifyMsg) -> Result<Self, Self::Error> {
+        let identity_info = PeerInfo {
+            wire_version: identity_msg.wire_version(),
+            daemon_version: identity_msg.daemon_version()?,
+            environment: identity_msg.environment().into(),
+            protocols: identity_msg.protocols(),
+        };
+
+        Ok(identity_info)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Conversion to identity info failed: {error}")]
+pub struct ConversionError {
+    #[from]
+    error: anyhow::Error,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identify::PeerInfo;
     use crate::Environment;
-    use futures::Future;
-    use futures::FutureExt;
     use libp2p_core::PublicKey;
     use std::collections::HashSet;
     use std::time::Duration;
+    use tokio::sync::watch;
     use xtra::spawn::TokioGlobalSpawnExt;
     use xtra::Actor as _;
     use xtra::Address;
@@ -34,14 +67,14 @@ mod tests {
             .with_test_writer()
             .init();
 
-        let (maker_peer_id, maker_dialer_actor, maker_endpoint) = create_endpoint_with_identify(
+        let (maker_peer_id, maker_endpoint, maker_receiver) = create_endpoint_with_identify(
             "0.4.22".to_string(),
             Environment::Unknown,
             Keypair::generate_ed25519().public(),
             HashSet::new(),
             HashSet::from(["some_maker_protocol".to_string()]),
         );
-        let (taker_peer_id, taker_dialer_actor, taker_endpoint) = create_endpoint_with_identify(
+        let (_, taker_endpoint, taker_receiver) = create_endpoint_with_identify(
             "0.4.22".to_string(),
             Environment::Umbrel,
             Keypair::generate_ed25519().public(),
@@ -63,40 +96,24 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let taker_to_maker_peer_info = {
-            || {
-                let taker_dialer_actor = taker_dialer_actor.clone();
-                async move {
-                    taker_dialer_actor
-                        .send(dialer::GetPeerInfo(maker_peer_id))
-                        .map(|res| res.unwrap())
-                        .await
-                }
-            }
-        };
+        let taker_to_maker_peer_info = || taker_receiver.borrow().clone();
         let maker_peer_info = retry_until_some(taker_to_maker_peer_info).await;
 
-        let maker_to_taker_peer_info = || {
-            let maker_dialer_actor = maker_dialer_actor.clone();
-            async move {
-                maker_dialer_actor
-                    .send(dialer::GetPeerInfo(taker_peer_id))
-                    .map(|res| res.unwrap())
-                    .await
-            }
-        };
+        let maker_to_taker_peer_info = || maker_receiver.borrow().clone();
         let taker_peer_info = retry_until_some(maker_to_taker_peer_info).await;
 
-        let expected_maker_peer_info = dialer::PeerInfo {
+        let expected_maker_peer_info = PeerInfo {
             wire_version: "0.3.0".to_string(),
             daemon_version: "0.4.22".to_string(),
             environment: Environment::Unknown,
+            protocols: HashSet::from(["some_maker_protocol".to_string()]),
         };
 
-        let expected_taker_peer_info = dialer::PeerInfo {
+        let expected_taker_peer_info = PeerInfo {
             wire_version: "0.3.0".to_string(),
             daemon_version: "0.4.22".to_string(),
             environment: Environment::Umbrel,
+            protocols: HashSet::from(["some_taker_protocol".to_string()]),
         };
 
         assert_eq!(maker_peer_info, expected_maker_peer_info);
@@ -110,13 +127,13 @@ mod tests {
         identity: PublicKey,
         listen_addrs: HashSet<Multiaddr>,
         protocols: HashSet<String>,
-    ) -> (PeerId, Address<dialer::Actor>, Address<Endpoint>) {
+    ) -> (PeerId, Address<Endpoint>, watch::Receiver<Option<PeerInfo>>) {
         let (endpoint_address, endpoint_context) = Context::new(None);
 
         let id = Keypair::generate_ed25519();
-        let identify_dialer = dialer::Actor::new(endpoint_address.clone())
-            .create(None)
-            .spawn_global();
+        let (identify_dialer, receiver) =
+            dialer::Actor::new_with_subscriber(endpoint_address.clone());
+        let identify_dialer = identify_dialer.create(None).spawn_global();
 
         let identify_listener = listener::Actor::new(
             daemon_version,
@@ -135,7 +152,7 @@ mod tests {
             [(PROTOCOL, identify_listener.into())],
             Subscribers::new(
                 vec![identify_dialer.clone().into()],
-                vec![identify_dialer.clone().into()],
+                vec![identify_dialer.into()],
                 vec![],
                 vec![],
             ),
@@ -144,16 +161,15 @@ mod tests {
         #[allow(clippy::disallowed_methods)]
         tokio::spawn(endpoint_context.run(endpoint));
 
-        (id.public().to_peer_id(), identify_dialer, endpoint_address)
+        (id.public().to_peer_id(), endpoint_address, receiver)
     }
 
-    async fn retry_until_some<F, FUT, T>(mut fut: F) -> T
+    async fn retry_until_some<F, T>(mut f: F) -> T
     where
-        F: FnMut() -> FUT,
-        FUT: Future<Output = Option<T>>,
+        F: FnMut() -> Option<T>,
     {
         loop {
-            match fut().await {
+            match f() {
                 Some(t) => return t,
                 None => tokio_extras::time::sleep(Duration::from_millis(200)).await,
             }

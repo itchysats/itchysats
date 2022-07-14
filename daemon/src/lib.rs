@@ -2,12 +2,14 @@
 
 use crate::bitcoin::util::psbt::PartiallySignedTransaction;
 use crate::bitcoin::Txid;
+use crate::listen_protocols::TAKER_LISTEN_PROTOCOLS;
 use anyhow::Context as _;
 use anyhow::Result;
 use bdk::bitcoin;
 use bdk::bitcoin::Amount;
 use bdk::FeeRate;
 use connection::ConnectionStatus;
+use identify::PeerInfo;
 use libp2p_core::Multiaddr;
 use libp2p_tcp::TokioTcpConfig;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
@@ -33,7 +35,6 @@ use xtra_libp2p::dialer;
 use xtra_libp2p::endpoint;
 use xtra_libp2p::multiaddress_ext::MultiaddrExt;
 use xtra_libp2p::Endpoint;
-use xtra_libp2p::NewInboundSubstream;
 use xtra_libp2p_ping::ping;
 use xtra_libp2p_ping::pong;
 use xtras::supervisor::always_restart;
@@ -64,6 +65,7 @@ pub mod rollover;
 pub mod seed;
 pub mod setup_contract;
 // TODO: Remove setup_contract_deprecated module after phasing out legacy networking
+pub mod listen_protocols;
 pub mod setup_contract_deprecated;
 pub mod setup_taker;
 pub mod shared_protocol;
@@ -86,77 +88,6 @@ pub const PING_INTERVAL: Duration = Duration::from_secs(30);
 
 pub const N_PAYOUTS: usize = 200;
 
-#[derive(Clone, Copy)]
-pub struct ProtocolFactory;
-
-impl ProtocolFactory {
-    const PONG_V1: &'static str = xtra_libp2p_ping::PROTOCOL_NAME;
-    const IDENTIFY_V1: &'static str = identify::PROTOCOL;
-    const OFFERS_V1: &'static str = xtra_libp2p_offer::PROTOCOL_NAME;
-    const ROLLOVER_V1: &'static str = rollover::PROTOCOL;
-    const COLLAB_SETTLEMENT_V1: &'static str = collab_settlement::PROTOCOL;
-
-    const LATEST_PONG: &'static str = Self::PONG_V1;
-    const LATEST_IDENTIFY: &'static str = Self::IDENTIFY_V1;
-    const LATEST_OFFERS: &'static str = Self::OFFERS_V1;
-    const LATEST_ROLLOVER: &'static str = Self::ROLLOVER_V1;
-    const LATEST_COLLAB_SETTLEMENT: &'static str = Self::COLLAB_SETTLEMENT_V1;
-
-    const MAKER_LISTEN: usize = 4;
-    const TAKER_LISTEN: usize = 3;
-
-    pub fn maker_listen_protocols() -> HashSet<String> {
-        // Latest protocols not to be removed!
-        // Legacy protocols can be added by using the specific protocol strings
-        let supported_protocols: [String; Self::MAKER_LISTEN] = [
-            Self::LATEST_PONG.to_string(),
-            Self::LATEST_IDENTIFY.to_string(),
-            Self::LATEST_ROLLOVER.to_string(),
-            Self::LATEST_COLLAB_SETTLEMENT.to_string(),
-        ];
-
-        HashSet::from(supported_protocols)
-    }
-
-    pub fn maker_protocol_handlers(
-        pong: Address<pong::Actor>,
-        identify: Address<identify::listener::Actor>,
-        rollover: Address<rollover::maker::Actor>,
-        collab_settlement: Address<collab_settlement::maker::Actor>,
-    ) -> [(&'static str, MessageChannel<NewInboundSubstream, ()>); Self::MAKER_LISTEN] {
-        // Latest protocols not to be removed!
-        // Legacy protocols can be added by using the specific protocol strings
-        [
-            (Self::LATEST_PONG, pong.into()),
-            (Self::LATEST_IDENTIFY, identify.into()),
-            (Self::LATEST_ROLLOVER, rollover.into()),
-            (Self::LATEST_COLLAB_SETTLEMENT, collab_settlement.into()),
-        ]
-    }
-
-    pub fn taker_listen_protocols() -> HashSet<String> {
-        let supported_protocols: [String; Self::TAKER_LISTEN] = [
-            Self::LATEST_PONG.to_string(),
-            Self::LATEST_IDENTIFY.to_string(),
-            Self::LATEST_OFFERS.to_string(),
-        ];
-
-        HashSet::from(supported_protocols)
-    }
-
-    pub fn taker_protocol_handlers(
-        pong: Address<pong::Actor>,
-        identify: Address<identify::listener::Actor>,
-        offers: Address<xtra_libp2p_offer::taker::Actor>,
-    ) -> [(&'static str, MessageChannel<NewInboundSubstream, ()>); Self::TAKER_LISTEN] {
-        [
-            (Self::LATEST_PONG, pong.into()),
-            (Self::LATEST_IDENTIFY, identify.into()),
-            (Self::LATEST_OFFERS, offers.into()),
-        ]
-    }
-}
-
 pub struct TakerActorSystem<O, W, P> {
     pub cfd_actor: Address<taker_cfd::Actor<O, W>>,
     pub connection_actor: Address<connection::Actor>,
@@ -168,8 +99,10 @@ pub struct TakerActorSystem<O, W, P> {
     _archive_failed_cfds_actor: Address<archive_failed_cfds::Actor>,
     _pong_actor: Address<pong::Actor>,
     _online_status_actor: Address<online_status::Actor>,
+    _identify_dialer_actor: Address<identify::dialer::Actor>,
 
     pub maker_online_status_feed_receiver: watch::Receiver<ConnectionStatus>,
+    pub identify_info_feed_receiver: watch::Receiver<Option<PeerInfo>>,
 
     _tasks: Tasks,
 }
@@ -343,14 +276,14 @@ where
                     environment,
                     identity.public(),
                     HashSet::new(),
-                    ProtocolFactory::taker_listen_protocols(),
+                    TAKER_LISTEN_PROTOCOLS.into(),
                 )
             }
         });
-        let (identify_dialer_supervisor, identify_dialer_actor) = Supervisor::new({
-            let endpoint_addr = endpoint_addr.clone();
-            move || identify::dialer::Actor::new(endpoint_addr.clone())
-        });
+
+        let (identify_dialer_actor, identify_info_feed_receiver) =
+            identify::dialer::Actor::new_with_subscriber(endpoint_addr.clone());
+        let identify_dialer_actor = identify_dialer_actor.create(None).spawn(&mut tasks);
 
         let pong_address = pong::Actor.create(None).spawn(&mut tasks);
 
@@ -362,7 +295,7 @@ where
             Box::new(TokioTcpConfig::new),
             identity.libp2p,
             ENDPOINT_CONNECTION_TIMEOUT,
-            ProtocolFactory::taker_protocol_handlers(
+            TAKER_LISTEN_PROTOCOLS.inbound_substream_handlers(
                 pong_address.clone(),
                 identify_listener_actor,
                 libp2p_offer_addr,
@@ -377,7 +310,7 @@ where
                     dialer_actor.into(),
                     ping_actor.into(),
                     online_status_actor.clone().into(),
-                    identify_dialer_actor.into(),
+                    identify_dialer_actor.clone().into(),
                 ],
                 vec![],
                 vec![],
@@ -389,7 +322,6 @@ where
         tasks.add(dialer_supervisor.run_log_summary());
         tasks.add(offers_supervisor.run_log_summary());
         tasks.add(identify_listener_supervisor.run_log_summary());
-        tasks.add(identify_dialer_supervisor.run_log_summary());
 
         let (supervisor, price_feed_actor) =
             Supervisor::<_, xtra_bitmex_price_feed::Error>::with_policy(
@@ -419,8 +351,10 @@ where
             _archive_failed_cfds_actor: archive_failed_cfds_actor,
             _tasks: tasks,
             maker_online_status_feed_receiver,
+            identify_info_feed_receiver,
             _online_status_actor: online_status_actor,
             _pong_actor: pong_address,
+            _identify_dialer_actor: identify_dialer_actor,
         })
     }
 
@@ -535,45 +469,5 @@ mod tests {
         assert_eq!(Environment::from_str_or_unknown("umbrel"), Umbrel);
         assert_eq!(Environment::from_str_or_unknown("raspiblitz"), RaspiBlitz);
         assert_eq!(Environment::from_str_or_unknown("docker"), Docker);
-    }
-
-    #[test]
-    fn ensure_latest_taker_protocols() {
-        let taker_protocols = ProtocolFactory::taker_listen_protocols();
-
-        assert!(
-            taker_protocols.contains(ProtocolFactory::LATEST_PONG),
-            "Taker must support latest pong"
-        );
-        assert!(
-            taker_protocols.contains(ProtocolFactory::LATEST_IDENTIFY),
-            "Taker must support latest identify"
-        );
-        assert!(
-            taker_protocols.contains(ProtocolFactory::LATEST_OFFERS),
-            "Taker must support latest offers"
-        );
-    }
-
-    #[test]
-    fn ensure_latest_maker_protocols() {
-        let maker_protocols = ProtocolFactory::maker_listen_protocols();
-
-        assert!(
-            maker_protocols.contains(ProtocolFactory::LATEST_PONG),
-            "Maker must support latest pong"
-        );
-        assert!(
-            maker_protocols.contains(ProtocolFactory::LATEST_IDENTIFY),
-            "Maker must support latest identify"
-        );
-        assert!(
-            maker_protocols.contains(ProtocolFactory::LATEST_ROLLOVER),
-            "Maker must support latest rollover"
-        );
-        assert!(
-            maker_protocols.contains(ProtocolFactory::LATEST_COLLAB_SETTLEMENT),
-            "Maker must support latest collab settlement"
-        );
     }
 }

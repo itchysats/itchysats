@@ -11,6 +11,7 @@ use daemon::archive_failed_cfds;
 use daemon::collab_settlement;
 use daemon::command;
 use daemon::identify;
+use daemon::listen_protocols::MAKER_LISTEN_PROTOCOLS;
 use daemon::monitor;
 use daemon::oracle;
 use daemon::oracle::NoAnnouncement;
@@ -21,7 +22,6 @@ use daemon::rollover;
 use daemon::seed::Identities;
 use daemon::wallet;
 use daemon::Environment;
-use daemon::ProtocolFactory;
 use libp2p_tcp::TokioTcpConfig;
 use maia_core::secp256k1_zkp::XOnlyPublicKey;
 use maia_core::PartyParams;
@@ -200,7 +200,7 @@ where
                     Environment::Unknown,
                     identity.public(),
                     HashSet::from([listen_multiaddr.clone()]),
-                    ProtocolFactory::maker_listen_protocols(),
+                    MAKER_LISTEN_PROTOCOLS.into(),
                 )
             }
         });
@@ -212,7 +212,7 @@ where
             Box::new(TokioTcpConfig::new),
             identity.libp2p,
             ENDPOINT_CONNECTION_TIMEOUT,
-            ProtocolFactory::maker_protocol_handlers(
+            MAKER_LISTEN_PROTOCOLS.inbound_substream_handlers(
                 pong_address.clone(),
                 identify_listener_actor,
                 libp2p_rollover_addr,
