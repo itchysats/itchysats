@@ -4,6 +4,7 @@ use crate::version;
 use crate::wire;
 use crate::wire::EncryptedJsonCodec;
 use crate::wire::Version;
+use crate::ConnectionStatus;
 use crate::Environment;
 use anyhow::bail;
 use anyhow::Context;
@@ -91,22 +92,6 @@ pub struct Connect {
 
 pub struct MakerStreamMessage {
     pub item: Result<wire::MakerToTaker>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ConnectionStatus {
-    Online,
-    Offline {
-        reason: Option<ConnectionCloseReason>,
-    },
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ConnectionCloseReason {
-    VersionNegotiationFailed {
-        proposed_version: Version,
-        actual_version: Version,
-    },
 }
 
 /// Message sent from the `setup_taker::Actor` to the
@@ -372,8 +357,8 @@ pub async fn connect(
             .await
             .expect("watch channel should outlive the future");
 
-        let connection_status = maker_online_status_feed_receiver.borrow().clone();
-        if matches!(connection_status, ConnectionStatus::Offline { .. }) {
+        let connection_status = *maker_online_status_feed_receiver.borrow();
+        if matches!(connection_status, ConnectionStatus::Offline) {
             tracing::debug!("No connection to the maker");
             'connect: loop {
                 for address in &maker_addresses {

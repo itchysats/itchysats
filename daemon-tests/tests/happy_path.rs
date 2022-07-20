@@ -2,7 +2,7 @@ use anyhow::Context;
 use daemon::bdk::bitcoin::Amount;
 use daemon::bdk::bitcoin::SignedAmount;
 use daemon::bdk::bitcoin::Txid;
-use daemon::connection::ConnectionStatus;
+use daemon::online_status::ConnectionStatus;
 use daemon::projection::CfdOrder;
 use daemon::projection::CfdState;
 use daemon::projection::MakerOffers;
@@ -858,7 +858,7 @@ async fn taker_notices_lack_of_maker() {
     sleep(Duration::from_secs(5)).await; // wait a bit until taker notices change
 
     assert_eq!(
-        ConnectionStatus::Offline { reason: None },
+        ConnectionStatus::Offline,
         next(taker.maker_status_feed()).await.unwrap(),
     );
 
