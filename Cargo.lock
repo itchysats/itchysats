@@ -4067,6 +4067,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "webbrowser",
 ]
 
 [[package]]
@@ -4493,7 +4494,6 @@ dependencies = [
  "tokio-extras",
  "tracing",
  "uuid 0.8.2",
- "webbrowser",
  "x25519-dalek",
  "xtra",
  "xtra-bitmex-price-feed",

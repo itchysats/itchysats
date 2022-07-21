@@ -28,3 +28,41 @@ pub fn log_requests() -> impl Fairing {
         })
     })
 }
+
+/// Attach this fairing to enable loading the UI in the system default browser
+pub fn ui_browser_launch() -> impl Fairing {
+    AdHoc::on_liftoff("ui browser launch", move |rocket| {
+        Box::pin(async move {
+            let (username, password) = match (
+                rocket.state::<rocket_basicauth::Username>(),
+                rocket.state::<rocket_basicauth::Password>(),
+            ) {
+                (Some(username), Some(password)) => (username, password),
+                _ => {
+                    tracing::warn!("Username and password not configured correctly");
+                    return;
+                }
+            };
+
+            let http_endpoint = format!(
+                "http://{}:{}@{}:{}",
+                username,
+                password,
+                rocket.config().address,
+                rocket.config().port
+            );
+
+            match webbrowser::open(http_endpoint.as_str()) {
+                Ok(()) => {
+                    tracing::info!("The user interface was opened in your default browser");
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "Could not open user interface at {} in default browser because {e:#}",
+                        http_endpoint
+                    );
+                }
+            }
+        })
+    })
+}

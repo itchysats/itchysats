@@ -28,7 +28,6 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net",
 tokio-extras = { path = "../tokio-extras", features = ["xtra"] }
 tracing = { version = "0.1" }
 uuid = "0.8"
-webbrowser = "0.7.1"
 x25519-dalek = "1.1"
 xtra = { version = "0.6", features = ["instrumentation"] }
 xtra-bitmex-price-feed = { path = "../xtra-bitmex-price-feed" }

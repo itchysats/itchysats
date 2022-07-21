@@ -24,8 +24,6 @@ use libp2p_core::PeerId;
 use model::olivia;
 use model::Identity;
 use model::SETTLEMENT_INTERVAL;
-use rocket::fairing::AdHoc;
-use rocket::fairing::Fairing;
 use shared_bin::catchers::default_catchers;
 use shared_bin::cli::Network;
 use shared_bin::cli::Withdraw;
@@ -378,7 +376,7 @@ async fn main() -> Result<()> {
         .register("/", default_catchers())
         .attach(fairings::log_launch())
         .attach(fairings::log_requests())
-        .attach(ui_browser_launch())
+        .attach(fairings::ui_browser_launch())
         .launch()
         .await?;
 
@@ -400,42 +398,4 @@ async fn resolve_maker_addresses(maker_addr: &str) -> Result<Vec<SocketAddr>> {
         itertools::join(possible_addresses.iter(), ",")
     );
     Ok(possible_addresses)
-}
-
-/// Attach this fairing to enable loading the UI in the system default browser
-pub fn ui_browser_launch() -> impl Fairing {
-    AdHoc::on_liftoff("ui browser launch", move |rocket| {
-        Box::pin(async move {
-            let (username, password) = match (
-                rocket.state::<rocket_basicauth::Username>(),
-                rocket.state::<rocket_basicauth::Password>(),
-            ) {
-                (Some(username), Some(password)) => (username, password),
-                _ => {
-                    tracing::warn!("Username and password not configured correctly");
-                    return;
-                }
-            };
-
-            let http_endpoint = format!(
-                "http://{}:{}@{}:{}",
-                username,
-                password,
-                rocket.config().address,
-                rocket.config().port
-            );
-
-            match webbrowser::open(http_endpoint.as_str()) {
-                Ok(()) => {
-                    tracing::info!("The user interface was opened in your default browser");
-                }
-                Err(e) => {
-                    tracing::debug!(
-                        "Could not open user interface at {} in default browser because {e:#}",
-                        http_endpoint
-                    );
-                }
-            }
-        })
-    })
 }
