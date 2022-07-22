@@ -158,11 +158,8 @@ impl Actor {
         let order_id = OrderId::default();
         let place_order = order::taker::PlaceOrder::new(
             order_id,
+            offer_id,
             (quantity, leverage, offer.position_maker),
-            offer.price,
-            offer.settlement_interval,
-            (offer.opening_fee, offer.funding_rate, offer.tx_fee_rate),
-            offer.oracle_event_id,
             self.maker_peer_id.inner(),
         );
 

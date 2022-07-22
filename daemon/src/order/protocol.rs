@@ -2,7 +2,7 @@ use crate::wire::SetupMsg;
 use anyhow::bail;
 use anyhow::Result;
 use model::olivia::BitMexPriceEventId;
-use model::FundingRate;
+use model::{FundingRate, OfferId};
 use model::Leverage;
 use model::OpeningFee;
 use model::OrderId;
@@ -18,15 +18,10 @@ use time::Duration;
 pub(crate) enum TakerMessage {
     PlaceOrder {
         id: OrderId,
+        offer_id: OfferId,
         quantity: Usd,
         leverage: Leverage,
         position: Position,
-        opening_price: Price,
-        settlement_interval: Duration,
-        opening_fee: OpeningFee,
-        funding_rate: FundingRate,
-        tx_fee_rate: TxFeeRate,
-        oracle_event_id: BitMexPriceEventId,
     },
     ContractSetupMsg(Box<SetupMsg>),
 }

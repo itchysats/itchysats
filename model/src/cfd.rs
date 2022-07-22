@@ -65,6 +65,8 @@ use uuid::Uuid;
 
 pub const CET_TIMELOCK: u32 = 12;
 
+pub type OfferId = OrderId;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(Uuid);
 
@@ -577,6 +579,7 @@ pub struct Cfd {
 
     // static
     id: OrderId,
+    offer_id: OfferId,
     position: Position,
     initial_price: Price,
     initial_funding_rate: FundingRate,
@@ -629,6 +632,7 @@ impl Cfd {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: OrderId,
+        offer_id: OfferId,
         position: Position,
         initial_price: Price,
         taker_leverage: Leverage,
@@ -659,6 +663,7 @@ impl Cfd {
         Cfd {
             version: 0,
             id,
+            offer_id,
             position,
             initial_price,
             long_leverage,

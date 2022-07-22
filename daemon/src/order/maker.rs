@@ -112,39 +112,12 @@ impl Actor {
         };
 
         let (
-            id,
-            quantity,
-            leverage,
-            position,
-            opening_price,
-            settlement_interval,
-            opening_fee,
-            funding_rate,
-            tx_fee_rate,
-            oracle_event_id,
+            id, offer_id, quantity, leverage, position
         ) = match order {
             TakerMessage::PlaceOrder {
-                id,
-                quantity,
-                leverage,
-                position,
-                opening_price,
-                settlement_interval,
-                opening_fee,
-                funding_rate,
-                tx_fee_rate,
-                oracle_event_id,
+                id, offer_id, quantity, leverage, position
             } => (
-                id,
-                quantity,
-                leverage,
-                position,
-                opening_price,
-                settlement_interval,
-                opening_fee,
-                funding_rate,
-                tx_fee_rate,
-                oracle_event_id,
+                id, offer_id, quantity, leverage, position
             ),
             TakerMessage::ContractSetupMsg(_) => {
                 tracing::error!("Unexpected message");
@@ -154,8 +127,11 @@ impl Actor {
 
         tracing::info!(taker = %peer, %quantity, order_id = %id, "Taker wants to place an order");
 
+        todo!("We need the current offer here to get the necessary values!");
+
         let cfd = Cfd::new(
             id,
+            offer_id,
             position,
             opening_price,
             leverage,

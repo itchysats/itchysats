@@ -23,7 +23,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use libp2p_core::PeerId;
 use maia_core::PartyParams;
-use model::olivia;
+use model::{OfferId, olivia, Order};
 use model::olivia::BitMexPriceEventId;
 use model::Cfd;
 use model::FundingRate;
@@ -108,12 +108,7 @@ impl Actor {
                     quantity,
                     leverage,
                     position,
-                    opening_price,
-                    settlement_interval,
-                    opening_fee,
-                    funding_rate,
-                    tx_fee_rate,
-                    oracle_event_id,
+                    offer_id,
                     maker_peer_id: maker,
                 } = msg;
 
@@ -158,15 +153,9 @@ impl Actor {
                 framed
                     .send(TakerMessage::PlaceOrder {
                         id,
+                        offer_id,
                         quantity,
                         leverage,
-                        position,
-                        opening_price,
-                        settlement_interval,
-                        opening_fee,
-                        funding_rate,
-                        tx_fee_rate,
-                        oracle_event_id,
                     })
                     .await?;
 
@@ -259,39 +248,26 @@ impl Actor {
 #[derive(Debug)]
 pub(crate) struct PlaceOrder {
     id: OrderId,
+    offer_id: OfferId,
     quantity: Usd,
     leverage: Leverage,
     position: Position,
-    opening_price: Price,
-    settlement_interval: Duration,
-    opening_fee: OpeningFee,
-    funding_rate: FundingRate,
-    tx_fee_rate: TxFeeRate,
-    oracle_event_id: BitMexPriceEventId,
     maker_peer_id: PeerId,
 }
 
 impl PlaceOrder {
     pub(crate) fn new(
         id: OrderId,
-        (quantity, leverage, position): (Usd, Leverage, Position),
-        opening_price: Price,
-        settlement_interval: Duration,
-        (opening_fee, funding_rate, tx_fee_rate): (OpeningFee, FundingRate, TxFeeRate),
-        oracle_event_id: BitMexPriceEventId,
+        offer_id: OrderId,
+        (quantity, leverage, position, trading_pair): (Usd, Leverage, Position),
         maker_peer_id: PeerId,
     ) -> Self {
         Self {
             id,
+            offer_id,
             quantity,
             leverage,
             position,
-            opening_price,
-            settlement_interval,
-            opening_fee,
-            funding_rate,
-            tx_fee_rate,
-            oracle_event_id,
             maker_peer_id,
         }
     }
