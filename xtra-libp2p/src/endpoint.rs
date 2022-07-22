@@ -524,6 +524,10 @@ impl Endpoint {
         );
     }
 
+    // The diff in this file allows us to go back to the behaviour
+    // before patch 98b488f0db4e5867a1d1139a2e307ef40937cf67, without
+    // needing to rebase in between. Apply and stash to go back and
+    // forth.
     #[must_use]
     async fn handle(
         &mut self,
@@ -554,11 +558,17 @@ impl Endpoint {
                     "If negotiation is successful, must have selected the only protocol we sent."
                 );
 
-                Ok(stream)
+                Result::<_, Error>::Ok(stream)
             }
         };
 
-        Ok(Box::pin(fut))
+        // We await on the future directly and return a boxed future
+        // that resolves immediately: just as if we went back in time
+        // before patch 98b488f0db4e5867a1d1139a2e307ef40937cf67
+
+        let stream = fut.await?;
+
+        Ok(Box::pin(async { Ok(stream) }))
     }
 
     #[must_use]

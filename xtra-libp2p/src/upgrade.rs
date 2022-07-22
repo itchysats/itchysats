@@ -133,6 +133,23 @@ where
                 let supported_protocols = supported_inbound_protocols.clone();
 
                 let fut = async move {
+                    // This is an extremely hacky way of simulating
+                    // the behaviour of a protocol negotiation between
+                    // two `Endpoint`s which takes a really long time.
+                    //
+                    // Since this patch is not mergeable, we need to
+                    // find an alternative if we want to add this
+                    // test. Perhaps we could slow down the rate at
+                    // which we handle new `stream`s in this closure
+                    // or ensure that the
+                    // `multistream_seletc::{dialer,
+                    // listener}_select_proto` calls hang
+                    // indefinitely.
+                    if supported_protocols.contains(&"/infinite-negotiation") {
+                        #[allow(clippy::disallowed_methods)]
+                        tokio::time::sleep(Duration::from_secs(100_000)).await;
+                    }
+
                     let result = tokio_extras::time::timeout(
                         connection_timeout,
                         multistream_select::listener_select_proto(stream, &supported_protocols),
