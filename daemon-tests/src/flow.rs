@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 
 /// Waiting time for the time on the watch channel before returning error
-const NEXT_WAIT_TIME: Duration = Duration::from_secs(if cfg!(debug_assertions) { 90 } else { 30 });
+const NEXT_WAIT_TIME: Duration = Duration::from_secs(if cfg!(debug_assertions) { 120 } else { 30 });
 
 pub async fn next_maker_offers(
     rx_a: &mut watch::Receiver<MakerOffers>,
