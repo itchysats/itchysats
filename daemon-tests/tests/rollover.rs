@@ -228,18 +228,6 @@ async fn retry_rollover_an_open_cfd_from_contract_setup() {
     )
     .await;
 
-    assert_ne!(
-        taker_commit_txid_after_contract_setup,
-        taker.latest_commit_txid(),
-        "The commit_txid of the taker after the rollover retry should have changed"
-    );
-
-    assert_eq!(
-        taker.latest_commit_txid(),
-        maker.latest_commit_txid(),
-        "The maker and taker should have the same commit_txid after the rollover retry"
-    );
-
     // 3. Ensure that we can do another rollover after the retry
     // After another rollover we expect to be charged for 48h
     rollover(
@@ -309,18 +297,6 @@ async fn retry_rollover_an_open_cfd_from_contract_setup_with_rollover_in_between
         predict_fees.calculate_for_hours(24),
     )
     .await;
-
-    assert_ne!(
-        taker_commit_txid_after_contract_setup,
-        taker.latest_commit_txid(),
-        "The commit_txid of the taker after the rollover retry should have changed"
-    );
-
-    assert_eq!(
-        taker.latest_commit_txid(),
-        maker.latest_commit_txid(),
-        "The maker and taker should have the same commit_txid after the rollover retry"
-    );
 
     // 3. Ensure that we can do another rollover after the retry
     // After another rollover we expect to be charged for 48h
@@ -392,18 +368,6 @@ async fn retry_rollover_an_open_cfd_from_previous_rollover() {
     )
     .await;
 
-    assert_ne!(
-        taker_commit_txid_after_first_rollover,
-        taker.latest_commit_txid(),
-        "The commit_txid of the taker after the rollover retry should have changed"
-    );
-
-    assert_eq!(
-        taker.latest_commit_txid(),
-        maker.latest_commit_txid(),
-        "The maker and taker should have the same commit_txid after the rollover retry"
-    );
-
     // 3. Ensure that we can do another rollover after the retry
     rollover(
         &mut maker,
@@ -451,6 +415,9 @@ async fn rollover(
 ) {
     // make sure the expected oracle data is mocked
     mock_oracle_announcements(maker, taker, oracle_data.announcement().clone()).await;
+
+    let commit_tx_id_before_rollover_maker = maker.latest_commit_txid();
+    let commit_tx_id_before_rollover_taker = taker.latest_commit_txid();
 
     match from_params_taker {
         None => {
@@ -514,5 +481,23 @@ async fn rollover(
             .unwrap()
             .settlement_event_id,
         "Taker's latest event-id does not match given event-id"
+    );
+
+    assert_ne!(
+        commit_tx_id_before_rollover_maker,
+        maker.latest_commit_txid(),
+        "The commit_txid of the taker after the rollover retry should have changed"
+    );
+
+    assert_ne!(
+        commit_tx_id_before_rollover_taker,
+        taker.latest_commit_txid(),
+        "The commit_txid of the maker after the rollover retry should have changed"
+    );
+
+    assert_eq!(
+        taker.latest_commit_txid(),
+        maker.latest_commit_txid(),
+        "The maker and taker should have the same commit_txid after the rollover"
     );
 }
