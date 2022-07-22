@@ -1,3 +1,7 @@
+use crate::util::make_node;
+use crate::util::GetConnectedPeers;
+use crate::util::GetListenAddresses;
+use crate::util::Node;
 use anyhow::Context as _;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -7,25 +11,21 @@ use futures::StreamExt;
 use libp2p_core::multiaddr::Protocol;
 use libp2p_core::Multiaddr;
 use std::collections::HashSet;
-use std::time::Duration;
 use xtra::message_channel::MessageChannel;
 use xtra::spawn::TokioGlobalSpawnExt;
 use xtra::Actor;
-use xtra::Address;
 use xtra::Context;
 use xtra_libp2p::endpoint;
-use xtra_libp2p::endpoint::Subscribers;
-use xtra_libp2p::libp2p::identity::Keypair;
-use xtra_libp2p::libp2p::transport::MemoryTransport;
 use xtra_libp2p::libp2p::PeerId;
 use xtra_libp2p::Connect;
 use xtra_libp2p::Disconnect;
-use xtra_libp2p::Endpoint;
 use xtra_libp2p::GetConnectionStats;
 use xtra_libp2p::ListenOn;
 use xtra_libp2p::NewInboundSubstream;
 use xtra_libp2p::OpenSubstream;
 use xtra_productivity::xtra_productivity;
+
+mod util;
 
 #[tokio::test]
 async fn hello_world() {
@@ -343,46 +343,6 @@ async fn alice_and_bob<const AN: usize, const BN: usize>(
     (alice, bob, alice_listen)
 }
 
-/// Small aggregate dedicated to keep everything that's related to one party
-/// (e.g. alice or bob) in one place
-struct Node {
-    pub peer_id: PeerId,
-    pub endpoint: Address<Endpoint>,
-    pub subscriber_stats: Address<EndpointSubscriberStats>,
-}
-
-fn make_node<const N: usize>(
-    substream_handlers: [(&'static str, MessageChannel<NewInboundSubstream, ()>); N],
-) -> Node {
-    let id = Keypair::generate_ed25519();
-    let peer_id = id.public().to_peer_id();
-
-    let subscriber_stats = EndpointSubscriberStats::default()
-        .create(None)
-        .spawn_global();
-
-    let endpoint = Endpoint::new(
-        Box::new(MemoryTransport::default),
-        id,
-        Duration::from_secs(20),
-        substream_handlers,
-        Subscribers::new(
-            vec![subscriber_stats.clone().into()],
-            vec![subscriber_stats.clone().into()],
-            vec![subscriber_stats.clone().into()],
-            vec![subscriber_stats.clone().into()],
-        ),
-    )
-    .create(None)
-    .spawn_global();
-
-    Node {
-        peer_id,
-        endpoint,
-        subscriber_stats,
-    }
-}
-
 /// A test actor subscribing to all the notifications
 #[derive(Default)]
 struct EndpointSubscriberStats {
@@ -426,12 +386,6 @@ impl EndpointSubscriberStats {
         self.listen_addresses.clone()
     }
 }
-
-/// Returns connected peers
-struct GetConnectedPeers;
-
-/// Returns current listen addressess
-struct GetListenAddresses;
 
 #[derive(Default)]
 struct HelloWorld;
