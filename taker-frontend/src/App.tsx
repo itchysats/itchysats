@@ -21,6 +21,7 @@ import {
     intoCfd,
     intoMakerOffer,
     LeverageDetails,
+    MakerCompatibility,
     MakerOffer,
     WalletInfo,
 } from "./types";
@@ -120,6 +121,13 @@ export const App = () => {
     const cfdsOrUndefined = useLatestEvent<Cfd[]>(source, "cfds", intoCfd);
     let cfds = cfdsOrUndefined ? cfdsOrUndefined! : [];
     const connectedToMakerOrUndefined = useLatestEvent<ConnectionStatus>(source, "maker_status");
+    const makerCompatibilityOrUndefined = useLatestEvent<MakerCompatibility>(source, "maker_identity");
+
+    let incompatible = false;
+    if (makerCompatibilityOrUndefined) {
+        incompatible = makerCompatibilityOrUndefined.unsupported_protocols != undefined;
+    }
+
     const connectedToMaker = connectedToMakerOrUndefined ? connectedToMakerOrUndefined : { online: false };
 
     dayjs.extend(relativeTime);
@@ -172,8 +180,13 @@ export const App = () => {
 
     const {
         isOpen: outdatedWarningIsVisible,
-        onClose,
+        onClose: onCloseOutdatedWarning,
     } = useDisclosure({ defaultIsOpen: outdated });
+
+    const {
+        isOpen: incompatibleWarningIsVisible,
+        onClose: onCloseIncompatibleWarning,
+    } = useDisclosure({ defaultIsOpen: incompatible });
 
     const pathname = location.pathname;
     useEffect(() => {
@@ -189,9 +202,11 @@ export const App = () => {
                 element={
                     <MainPageLayout
                         outdatedWarningIsVisible={outdatedWarningIsVisible}
+                        incompatibleWarningIsVisible={incompatibleWarningIsVisible}
                         githubVersion={githubVersion}
                         daemonVersion={daemonVersion}
-                        onClose={onClose}
+                        onCloseOutdatedWarning={onCloseOutdatedWarning}
+                        onCloseIncompatibleWarning={onCloseIncompatibleWarning}
                         walletInfo={walletInfo}
                         connectedToMaker={connectedToMaker}
                         nextFundingEvent={nextFundingEvent}

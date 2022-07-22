@@ -363,6 +363,7 @@ async fn main() -> Result<()> {
         .manage(identity_info)
         .manage(bitcoin_network)
         .manage(taker.maker_online_status_feed_receiver.clone())
+        .manage(taker.identify_info_feed_receiver.clone())
         .manage(taker)
         .manage(auth_username)
         .manage(web_password)

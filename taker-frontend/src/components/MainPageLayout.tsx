@@ -5,14 +5,17 @@ import { SemVer } from "semver";
 import { BG_DARK, BG_LIGHT, FOOTER_HEIGHT, HEADER_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_WIDTH_PX } from "../App";
 import { ConnectionStatus, IdentityInfo, WalletInfo } from "../types";
 import Footer from "./Footer";
+import IncompatibleWarning from "./IncompatibleWarning";
 import Nav from "./NavBar";
 import OutdatedWarning from "./OutdatedWarning";
 
 type MainPageProps = {
     outdatedWarningIsVisible: boolean;
+    incompatibleWarningIsVisible: boolean;
     githubVersion: SemVer | null | undefined;
     daemonVersion: SemVer | null | undefined;
-    onClose: () => void;
+    onCloseOutdatedWarning: () => void;
+    onCloseIncompatibleWarning: () => void;
     walletInfo: WalletInfo | null;
     connectedToMaker: ConnectionStatus;
     nextFundingEvent: string | null;
@@ -25,9 +28,11 @@ type MainPageProps = {
 export function MainPageLayout(
     {
         outdatedWarningIsVisible,
+        incompatibleWarningIsVisible,
         githubVersion,
         daemonVersion,
-        onClose,
+        onCloseOutdatedWarning,
+        onCloseIncompatibleWarning,
         walletInfo,
         connectedToMaker,
         nextFundingEvent,
@@ -40,7 +45,16 @@ export function MainPageLayout(
     return (
         <>
             {outdatedWarningIsVisible
-                && <OutdatedWarning githubVersion={githubVersion} daemonVersion={daemonVersion} onClose={onClose} />}
+                && (
+                    <OutdatedWarning
+                        githubVersion={githubVersion}
+                        daemonVersion={daemonVersion}
+                        onClose={onCloseOutdatedWarning}
+                    />
+                )}
+
+            {incompatibleWarningIsVisible
+                && <IncompatibleWarning onClose={onCloseIncompatibleWarning} />}
 
             <Nav
                 walletInfo={walletInfo}
