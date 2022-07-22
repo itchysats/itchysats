@@ -211,7 +211,7 @@ macro_rules! wait_next_state {
 pub async fn start_from_open_cfd_state(
     announcement: Announcement,
     position_maker: Position,
-) -> (Maker, Taker, OrderId, FeeStructure) {
+) -> (Maker, Taker, OrderId, PredictFees) {
     let mut maker = Maker::start(&MakerConfig::default()).await;
     let mut taker = Taker::start(
         &TakerConfig::default(),
@@ -228,7 +228,7 @@ pub async fn start_from_open_cfd_state(
     let quantity = Usd::new(dec!(100));
     let taker_leverage = Leverage::TWO;
 
-    let fee_structure = FeeStructure::new(
+    let predict_fees = PredictFees::new(
         offer_params.clone(),
         quantity,
         taker_leverage,
@@ -280,10 +280,10 @@ pub async fn start_from_open_cfd_state(
     confirm!(lock transaction, order_to_take.id, maker, taker);
     wait_next_state!(order_to_take.id, maker, taker, CfdState::Open);
 
-    (maker, taker, order_to_take.id, fee_structure)
+    (maker, taker, order_to_take.id, predict_fees)
 }
 
-pub struct FeeStructure {
+pub struct PredictFees {
     /// Opening fee charged by the maker
     opening_fee: OpeningFee,
 
@@ -298,7 +298,7 @@ pub struct FeeStructure {
     taker_leverage: Leverage,
 }
 
-impl FeeStructure {
+impl PredictFees {
     pub fn new(
         offer_params: OfferParams,
         quantity: Usd,
@@ -336,7 +336,7 @@ impl FeeStructure {
         }
     }
 
-    pub fn predict_fees(
+    pub fn calculate_for_hours(
         &self,
         accumulated_rollover_hours_to_charge: i64,
     ) -> (SignedAmount, SignedAmount) {

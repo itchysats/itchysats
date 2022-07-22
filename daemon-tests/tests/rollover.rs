@@ -10,8 +10,8 @@ use daemon_tests::maia::OliviaData;
 use daemon_tests::mock_oracle_announcements;
 use daemon_tests::start_from_open_cfd_state;
 use daemon_tests::wait_next_state;
-use daemon_tests::FeeStructure;
 use daemon_tests::Maker;
+use daemon_tests::PredictFees;
 use daemon_tests::Taker;
 use model::olivia::BitMexPriceEventId;
 use model::OrderId;
@@ -20,7 +20,7 @@ use otel_tests::otel_test;
 
 #[otel_test]
 async fn rollover_an_open_cfd_maker_going_short() {
-    let (mut maker, mut taker, order_id, fee_structure) =
+    let (mut maker, mut taker, order_id, predict_fees) =
         prepare_rollover(Position::Short, OliviaData::example_0()).await;
 
     // We charge 24 hours for the rollover because that is the fallback strategy if the timestamp of
@@ -31,14 +31,14 @@ async fn rollover_an_open_cfd_maker_going_short() {
         order_id,
         OliviaData::example_0(),
         None,
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 }
 
 #[otel_test]
 async fn rollover_an_open_cfd_maker_going_long() {
-    let (mut maker, mut taker, order_id, fee_structure) =
+    let (mut maker, mut taker, order_id, predict_fees) =
         prepare_rollover(Position::Long, OliviaData::example_0()).await;
 
     // We charge 24 hours for the rollover because that is the fallback strategy if the timestamp of
@@ -49,7 +49,7 @@ async fn rollover_an_open_cfd_maker_going_long() {
         order_id,
         OliviaData::example_0(),
         None,
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 }
@@ -58,7 +58,7 @@ async fn rollover_an_open_cfd_maker_going_long() {
 async fn double_rollover_an_open_cfd() {
     // double rollover ensures that both parties properly succeeded and can do another rollover
 
-    let (mut maker, mut taker, order_id, fee_structure) =
+    let (mut maker, mut taker, order_id, predict_fees) =
         prepare_rollover(Position::Short, OliviaData::example_0()).await;
 
     // We charge 24 hours for the rollover because that is the fallback strategy if the timestamp of
@@ -69,7 +69,7 @@ async fn double_rollover_an_open_cfd() {
         order_id,
         OliviaData::example_0(),
         None,
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 
@@ -79,7 +79,7 @@ async fn double_rollover_an_open_cfd() {
         order_id,
         OliviaData::example_0(),
         None,
-        fee_structure.predict_fees(48),
+        predict_fees.calculate_for_hours(48),
     )
     .await;
 }
@@ -183,7 +183,7 @@ async fn maker_accepts_rollover_after_commit_finality() {
 /// The second rollover is done with `example_0` (we re-use it)
 #[otel_test]
 async fn retry_rollover_an_open_cfd_from_contract_setup() {
-    let (mut maker, mut taker, order_id, fee_structure) =
+    let (mut maker, mut taker, order_id, predict_fees) =
         prepare_rollover(Position::Short, OliviaData::example_0()).await;
 
     let taker_commit_txid_after_contract_setup = taker.latest_commit_txid();
@@ -198,7 +198,7 @@ async fn retry_rollover_an_open_cfd_from_contract_setup() {
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 
@@ -224,7 +224,7 @@ async fn retry_rollover_an_open_cfd_from_contract_setup() {
             taker_commit_txid_after_contract_setup,
             OliviaData::example_0().announcement().id,
         )),
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 
@@ -248,14 +248,14 @@ async fn retry_rollover_an_open_cfd_from_contract_setup() {
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(48),
+        predict_fees.calculate_for_hours(48),
     )
     .await;
 }
 
 #[otel_test]
 async fn retry_rollover_an_open_cfd_from_contract_setup_with_rollover_in_between() {
-    let (mut maker, mut taker, order_id, fee_structure) =
+    let (mut maker, mut taker, order_id, predict_fees) =
         prepare_rollover(Position::Short, OliviaData::example_0()).await;
 
     let taker_commit_txid_after_contract_setup = taker.latest_commit_txid();
@@ -269,7 +269,7 @@ async fn retry_rollover_an_open_cfd_from_contract_setup_with_rollover_in_between
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 
@@ -280,7 +280,7 @@ async fn retry_rollover_an_open_cfd_from_contract_setup_with_rollover_in_between
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(48),
+        predict_fees.calculate_for_hours(48),
     )
     .await;
 
@@ -306,7 +306,7 @@ async fn retry_rollover_an_open_cfd_from_contract_setup_with_rollover_in_between
             taker_commit_txid_after_contract_setup,
             OliviaData::example_0().announcement().id,
         )),
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 
@@ -330,14 +330,14 @@ async fn retry_rollover_an_open_cfd_from_contract_setup_with_rollover_in_between
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(48),
+        predict_fees.calculate_for_hours(48),
     )
     .await;
 }
 
 #[otel_test]
 async fn retry_rollover_an_open_cfd_from_previous_rollover() {
-    let (mut maker, mut taker, order_id, fee_structure) =
+    let (mut maker, mut taker, order_id, predict_fees) =
         prepare_rollover(Position::Short, OliviaData::example_0()).await;
 
     // 1. Do two rollovers
@@ -347,7 +347,7 @@ async fn retry_rollover_an_open_cfd_from_previous_rollover() {
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(24),
+        predict_fees.calculate_for_hours(24),
     )
     .await;
 
@@ -362,7 +362,7 @@ async fn retry_rollover_an_open_cfd_from_previous_rollover() {
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(48),
+        predict_fees.calculate_for_hours(48),
     )
     .await;
 
@@ -388,7 +388,7 @@ async fn retry_rollover_an_open_cfd_from_previous_rollover() {
             taker_commit_txid_after_first_rollover,
             OliviaData::example_0().announcement().id,
         )),
-        fee_structure.predict_fees(48),
+        predict_fees.calculate_for_hours(48),
     )
     .await;
 
@@ -411,7 +411,7 @@ async fn retry_rollover_an_open_cfd_from_previous_rollover() {
         order_id,
         OliviaData::example_1(),
         None,
-        fee_structure.predict_fees(72),
+        predict_fees.calculate_for_hours(72),
     )
     .await;
 }
@@ -419,8 +419,8 @@ async fn retry_rollover_an_open_cfd_from_previous_rollover() {
 async fn prepare_rollover(
     maker_position: Position,
     oracle_data: OliviaData,
-) -> (Maker, Taker, OrderId, FeeStructure) {
-    let (mut maker, mut taker, order_id, fee_structure) =
+) -> (Maker, Taker, OrderId, PredictFees) {
+    let (mut maker, mut taker, order_id, predict_fees) =
         start_from_open_cfd_state(oracle_data.announcement(), maker_position).await;
 
     // Maker needs to have an active offer in order to accept rollover
@@ -431,11 +431,11 @@ async fn prepare_rollover(
     let maker_cfd = maker.first_cfd();
     let taker_cfd = taker.first_cfd();
 
-    let (expected_maker_fee, expected_taker_fee) = fee_structure.predict_fees(0);
+    let (expected_maker_fee, expected_taker_fee) = predict_fees.calculate_for_hours(0);
     assert_eq!(expected_maker_fee, maker_cfd.accumulated_fees);
     assert_eq!(expected_taker_fee, taker_cfd.accumulated_fees);
 
-    (maker, taker, order_id, fee_structure)
+    (maker, taker, order_id, predict_fees)
 }
 
 async fn rollover(
