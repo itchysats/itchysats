@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use std::time::Duration;
 use tracing::Instrument;
+use tracing::Span;
 use xtra::address;
 
 #[async_trait]
@@ -20,15 +21,13 @@ where
         A: xtra::Handler<M, Return = ()>;
 }
 
-/// How verbose a given trace will be. If it is set to quiet, it will be disabled, alongside all
+/// How verbose a given trace will be. If it is set to never, it will be disabled, alongside all
 /// of its children.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum IncludeSpan {
-    OnError,
+    Never,
     Always,
 }
-
-pub const QUIET_NAME: &str = "Send message every interval (quiet)";
 
 #[async_trait]
 impl<A, M> SendInterval<A, M> for address::Address<A>
@@ -40,19 +39,21 @@ where
     where
         F: Send + Sync + Fn() -> M,
     {
-        let span = || match verbosity {
-            IncludeSpan::Always => {
+        let parent = match verbosity {
+            IncludeSpan::Always => Span::current(),
+            IncludeSpan::Never => {
+                tracing::info_span!(target: "quiet_children", "always_quiet_children")
+            }
+        };
+
+        let span = || {
+            parent.in_scope(|| {
                 tracing::debug_span!(
                     "Send message every interval",
                     interval_secs = %duration.as_secs(),
                 )
-            }
-            IncludeSpan::OnError => {
-                tracing::debug_span!(
-                    QUIET_NAME,
-                    interval_secs = %duration.as_secs(),
-                )
-            }
+                .or_current()
+            })
         };
 
         while self.send(constructor()).instrument(span()).await.is_ok() {
