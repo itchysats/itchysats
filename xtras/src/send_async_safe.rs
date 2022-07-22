@@ -47,7 +47,7 @@ where
             return Err(xtra::Error::Disconnected);
         }
 
-        let rx = self.send(msg).split_receiver().await;
+        let rx = self.send(msg).split_receiver().await?;
 
         #[allow(clippy::disallowed_methods)]
         tokio::spawn(async {

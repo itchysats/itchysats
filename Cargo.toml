@@ -24,7 +24,7 @@ members = [
 resolver = "2"
 
 [patch.crates-io]
-xtra = { git = "https://github.com/Restioson/xtra", rev = "ff782ad379abad33c715173d21e2221189e252c0" } # Unreleased
+xtra = { git = "https://github.com/Restioson/xtra", rev = "285b3e986013888cb68b9219464ef325d2468c2c" } # Unreleased
 maia = { git = "https://github.com/comit-network/maia", rev = "fc6b78b98407b10b55f8cfd152062ad77f98cd9f" } # Unreleased
 maia-core = { git = "https://github.com/comit-network/maia", tag = "0.1.1", package = "maia-core" } # Pinned to support maia 0.1 and 0.2
 xtra_productivity = { git = "https://github.com/comit-network/xtra-productivity", rev = "0bfd589b42a63149221dec7e95aca932875374dd" } # Unreleased
