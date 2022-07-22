@@ -13,8 +13,6 @@ use xtra_libp2p::GetConnectionStats;
 use xtra_libp2p::OpenSubstream;
 use xtra_productivity::xtra_productivity;
 
-pub const LIBP2P_BROADCAST_OFFERS_SPAN: &str = "Broadcast offers to taker (libp2p)";
-
 pub struct Actor {
     endpoint: xtra::Address<Endpoint>,
     connected_peers: HashSet<PeerId>,
@@ -59,9 +57,12 @@ impl Actor {
     async fn handle(&mut self, msg: NewOffers, ctx: &mut xtra::Context<Self>) {
         self.latest_offers = msg.0;
 
+        let quiet = tracing::info_span!(target: "quiet_children", "sometimes_quiet_children");
         for peer in self.connected_peers.iter().copied() {
             self.send_offers(peer, ctx)
-                .instrument(tracing::debug_span!(LIBP2P_BROADCAST_OFFERS_SPAN))
+                .instrument(quiet.in_scope(|| {
+                    tracing::debug_span!("Broadcast offers to taker (libp2p)").or_current()
+                }))
                 .await
         }
     }

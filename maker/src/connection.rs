@@ -20,7 +20,6 @@ use model::Identity;
 use model::Leverage;
 use model::MakerOffers;
 use model::OrderId;
-use shared_bin::logger;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -351,13 +350,14 @@ impl Actor {
 
         let mut broken_connections = Vec::with_capacity(self.connections.len());
 
+        let quiet = tracing::info_span!(target: "quiet_children", "always_quiet_children");
         for (id, conn) in &mut self.connections {
-            if let Err(e) = conn
-                .send(wire::MakerToTaker::CurrentOffers(offers.clone()))
-                .instrument(tracing::debug_span!(
-                    logger::span_names::OLD_BROADCAST_OFFERS
-                ))
-                .await
+            if let Err(e) =
+                conn.send(wire::MakerToTaker::CurrentOffers(offers.clone()))
+                    .instrument(quiet.in_scope(|| {
+                        tracing::debug_span!("Broadcast offers to taker").or_current()
+                    }))
+                    .await
             {
                 tracing::warn!("{:#}", e);
                 broken_connections.push(*id);
@@ -522,7 +522,7 @@ impl Actor {
                     "Omitting legacy heartbeat protocol - libp2p connection monitoring should suffice"
                 );
             } else {
-                tasks.add(this.send_interval(self.heartbeat_interval, move || SendHeartbeat(identity), xtras::IncludeSpan::OnError));
+                tasks.add(this.send_interval(self.heartbeat_interval, move || SendHeartbeat(identity), xtras::IncludeSpan::Never));
             }
 
             self.connections.insert(

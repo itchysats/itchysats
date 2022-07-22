@@ -20,8 +20,6 @@ use xtra_productivity::xtra_productivity;
 use xtras::SendAsyncNext;
 use xtras::SendInterval;
 
-pub const PING_PEER_SPAN: &str = "Ping peer";
-
 /// An actor implementing the official ipfs/libp2p ping protocol.
 ///
 /// The ping protocol serves two purposes:
@@ -107,6 +105,8 @@ impl Actor {
     async fn handle(&mut self, _: Ping, ctx: &mut Context<Self>) {
         self.latencies.clear();
 
+        let quiet = tracing::info_span!(target: "quiet_children", "sometimes_quiet_children");
+
         for peer in self.connected_peers.iter().copied() {
             let endpoint = self.endpoint.clone();
             let this = ctx.address().expect("we are alive");
@@ -132,7 +132,8 @@ impl Actor {
 
             spawn_fallible(
                 &this,
-                ping_fut.instrument(tracing::debug_span!(PING_PEER_SPAN).or_current()),
+                ping_fut
+                    .instrument(quiet.in_scope(|| tracing::debug_span!("Ping peer").or_current())),
                 err_handler,
             );
         }
