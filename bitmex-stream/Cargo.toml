@@ -7,12 +7,18 @@ description = "A stable and simple connection to BitMex's websocket API."
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
 async-stream = "0.3"
 futures = "0.3"
+hex = "0.4.3"
+ring = "0.16"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tokio = { version = "1", features = ["macros", "time", "tracing"] }
 tokio-extras = { path = "../tokio-extras" }
 tokio-tungstenite = { version = "0.15", features = ["rustls-tls"] }
 tracing = "0.1"
+url = "2.2.2"
 
 [dev-dependencies]
 anyhow = "1"
