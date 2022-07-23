@@ -394,11 +394,16 @@ dependencies = [
  "anyhow",
  "async-stream",
  "futures",
+ "hex",
+ "ring",
+ "serde",
+ "serde_json",
  "tokio",
  "tokio-extras",
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

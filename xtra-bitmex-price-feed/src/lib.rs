@@ -45,6 +45,7 @@ impl xtra::Actor for Actor {
                     let mut stream = bitmex_stream::subscribe(
                         [format!("quoteBin{QUOTE_INTERVAL_MINUTES}m:XBTUSD")],
                         network,
+                        None,
                     );
 
                     while let Some(text) = stream

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bitmex_stream::Credentials;
 use bitmex_stream::Network;
 use futures::TryStreamExt;
 
@@ -8,8 +9,14 @@ async fn main() -> Result<()> {
         .with_env_filter("info,bitmex_stream=trace")
         .init();
 
-    let mut stream =
-        bitmex_stream::subscribe(["quoteBin1m:XBTUSD".to_owned()], Network::Mainnet, None);
+    let mut stream = bitmex_stream::subscribe(
+        ["execution".to_owned()],
+        Network::Testnet,
+        Some(Credentials {
+            api_key: "some_api_key".to_string(),
+            secret: "some_secret".to_string(),
+        }),
+    );
 
     while let Some(result) = stream.try_next().await? {
         tracing::info!("{result}");
