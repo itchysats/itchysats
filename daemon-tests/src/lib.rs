@@ -250,20 +250,21 @@ pub async fn start_from_open_cfd_state(
         .mock_oracle_announcement_with(announcement)
         .await;
 
-    let order_to_take = match position_maker {
+    let offer_to_take = match position_maker {
         Position::Short => received.short,
         Position::Long => received.long,
     }
     .context("Order for expected position not set")
     .unwrap();
 
-    taker
+    let offer_id = offer_to_take.id;
+
+    let order_id = taker
         .system
-        .take_offer(order_to_take.id, quantity, taker_leverage)
+        .place_order(offer_id, quantity, Leverage::TWO)
         .await
         .unwrap();
-
-    wait_next_state!(order_to_take.id, maker, taker, CfdState::PendingSetup);
+    wait_next_state!(order_id, maker, taker, CfdState::PendingSetup);
 
     maker.mocks.mock_party_params().await;
     taker.mocks.mock_party_params().await;
@@ -271,18 +272,17 @@ pub async fn start_from_open_cfd_state(
     maker.mocks.mock_wallet_sign_and_broadcast().await;
     taker.mocks.mock_wallet_sign_and_broadcast().await;
 
-    maker.system.accept_order(order_to_take.id).await.unwrap();
-    wait_next_state!(order_to_take.id, maker, taker, CfdState::ContractSetup);
+    maker.system.accept_order(order_id).await.unwrap();
+    wait_next_state!(order_id, maker, taker, CfdState::ContractSetup);
 
     sleep(Duration::from_secs(5)).await; // need to wait a bit until both transition
-    wait_next_state!(order_to_take.id, maker, taker, CfdState::PendingOpen);
+    wait_next_state!(order_id, maker, taker, CfdState::PendingOpen);
 
-    confirm!(lock transaction, order_to_take.id, maker, taker);
-    wait_next_state!(order_to_take.id, maker, taker, CfdState::Open);
+    confirm!(lock transaction, order_id, maker, taker);
+    wait_next_state!(order_id, maker, taker, CfdState::Open);
 
-    (maker, taker, order_to_take.id, fee_structure)
+    (maker, taker, order_id, fee_structure)
 }
-
 pub struct FeeStructure {
     /// Opening fee charged by the maker
     opening_fee: OpeningFee,
@@ -763,7 +763,6 @@ impl Taker {
             config.n_payouts,
             Duration::from_secs(10),
             projection_actor,
-            maker_identity,
             maker_multiaddr.clone(),
             Environment::Test,
         )
@@ -804,12 +803,12 @@ impl Taker {
         }
     }
 
-    pub async fn trigger_rollover_with_latest_dlc_params(&mut self, id: OrderId) {
+    pub async fn trigger_rollover_with_latest_dlc_params(&mut self, order_id: OrderId) {
         let latest_dlc = self.first_cfd().aggregated().latest_dlc().clone().unwrap();
         self.system
             .auto_rollover_actor
             .send(auto_rollover::Rollover {
-                order_id: id,
+                order_id,
                 maker_peer_id: Some(self.maker_peer_id),
                 from_commit_txid: latest_dlc.commit.0.txid(),
                 from_settlement_event_id: latest_dlc.settlement_event_id,
@@ -820,14 +819,14 @@ impl Taker {
 
     pub async fn trigger_rollover_with_specific_params(
         &mut self,
-        id: OrderId,
+        order_id: OrderId,
         from_commit_txid: Txid,
         from_settlement_event_id: BitMexPriceEventId,
     ) {
         self.system
             .auto_rollover_actor
             .send(auto_rollover::Rollover {
-                order_id: id,
+                order_id,
                 maker_peer_id: Some(self.maker_peer_id),
                 from_commit_txid,
                 from_settlement_event_id,

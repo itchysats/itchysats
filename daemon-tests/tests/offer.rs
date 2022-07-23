@@ -49,13 +49,13 @@ async fn taker_takes_order_and_maker_rejects() {
         .await
         .unwrap();
 
-    let order_id = received.short.unwrap().id;
+    let offer_id = received.short.unwrap().id;
 
     taker.mocks.mock_oracle_announcement().await;
     maker.mocks.mock_oracle_announcement().await;
-    taker
+    let order_id = taker
         .system
-        .take_offer(order_id, Usd::new(dec!(100)), Leverage::TWO)
+        .place_order(offer_id, Usd::new(dec!(100)), Leverage::TWO)
         .await
         .unwrap();
 
@@ -80,13 +80,13 @@ async fn another_offer_is_automatically_created_after_taker_takes_order() {
         .await
         .unwrap();
 
-    let order_id_take = received.short.unwrap().id;
+    let offer_id = received.short.unwrap().id;
 
     taker.mocks.mock_oracle_announcement().await;
     maker.mocks.mock_oracle_announcement().await;
     taker
         .system
-        .take_offer(order_id_take, Usd::new(dec!(10)), Leverage::TWO)
+        .place_order(offer_id, Usd::new(dec!(10)), Leverage::TWO)
         .await
         .unwrap();
 
@@ -101,12 +101,12 @@ async fn another_offer_is_automatically_created_after_taker_takes_order() {
     let new_order_id_taker = taker_update.short.unwrap().id;
 
     assert_ne!(
-        new_order_id_taker, order_id_take,
+        new_order_id_taker, offer_id,
         "Another offer should be available, and it should have a different id than first one"
     );
 
     assert_ne!(
-        new_order_id_maker, order_id_take,
+        new_order_id_maker, offer_id,
         "Another offer should be available, and it should have a different id than first one"
     );
 
@@ -130,14 +130,14 @@ async fn taker_takes_order_and_maker_accepts_and_contract_setup() {
         .await
         .unwrap();
 
-    let order_id = received.short.unwrap().id;
+    let offer_id = received.short.unwrap().id;
 
     taker.mocks.mock_oracle_announcement().await;
     maker.mocks.mock_oracle_announcement().await;
 
-    taker
+    let order_id = taker
         .system
-        .take_offer(order_id, Usd::new(dec!(100)), Leverage::TWO)
+        .place_order(offer_id, Usd::new(dec!(100)), Leverage::TWO)
         .await
         .unwrap();
     wait_next_state!(order_id, maker, taker, CfdState::PendingSetup);

@@ -14,6 +14,7 @@ use daemon::command;
 use daemon::libp2p_utils::can_use_libp2p;
 use daemon::oracle;
 use daemon::oracle::NoAnnouncement;
+use daemon::order;
 use daemon::process_manager;
 use daemon::projection;
 use daemon::wallet;
@@ -198,6 +199,7 @@ pub struct Actor<O: 'static, T: 'static, W: 'static> {
     libp2p_rollover: xtra::Address<daemon::rollover::maker::Actor>,
     libp2p_collab_settlement: xtra::Address<daemon::collab_settlement::maker::Actor>,
     libp2p_offer: xtra::Address<xtra_libp2p_offer::maker::Actor>,
+    order: xtra::Address<order::maker::Actor>,
 }
 
 impl<O, T, W> Actor<O, T, W> {
@@ -216,6 +218,7 @@ impl<O, T, W> Actor<O, T, W> {
         libp2p_rollover: xtra::Address<daemon::rollover::maker::Actor>,
         libp2p_collab_settlement: xtra::Address<daemon::collab_settlement::maker::Actor>,
         libp2p_offer: xtra::Address<xtra_libp2p_offer::maker::Actor>,
+        order: xtra::Address<order::maker::Actor>,
     ) -> Self {
         Self {
             db: db.clone(),
@@ -237,6 +240,7 @@ impl<O, T, W> Actor<O, T, W> {
             libp2p_rollover,
             libp2p_collab_settlement,
             libp2p_offer,
+            order,
         }
     }
 
@@ -458,7 +462,21 @@ impl<O, T, W> Actor<O, T, W> {
     async fn handle_accept_order(&mut self, msg: AcceptOrder) -> Result<()> {
         let AcceptOrder { order_id } = msg;
 
-        tracing::debug!(%order_id, "Maker accepts order");
+        match self
+            .order
+            .send(order::maker::Decision::Accept(order_id))
+            .await
+        {
+            Ok(Ok(_)) => return Ok(()),
+            Err(e) => {
+                tracing::warn!("Libp2p order actor is down, trying legacy mechanism: {e:#}");
+            }
+            Ok(Err(e)) => {
+                tracing::debug!(
+                    "Could not accept order via libp2p, trying legacy mechanism: {e:#}"
+                );
+            }
+        };
 
         match self
             .setup_actors
@@ -468,7 +486,10 @@ impl<O, T, W> Actor<O, T, W> {
             })
             .await
         {
-            Ok(Ok(())) => Ok(()),
+            Ok(Ok(())) => {
+                tracing::debug!(%order_id, "Maker accepts order");
+                Ok(())
+            }
             Ok(Err(NotConnected(e))) => {
                 self.executor
                     .execute(order_id, |cfd| Ok(cfd.fail_contract_setup(anyhow!(e))))
@@ -493,6 +514,22 @@ impl<O, T, W> Actor<O, T, W> {
         let RejectOrder { order_id } = msg;
 
         tracing::debug!(%order_id, "Maker rejects order");
+
+        match self
+            .order
+            .send(order::maker::Decision::Reject(order_id))
+            .await
+        {
+            Ok(Ok(_)) => return Ok(()),
+            Err(e) => {
+                tracing::warn!("Libp2p order actor is down, trying legacy mechanism: {e:#}");
+            }
+            Ok(Err(e)) => {
+                tracing::debug!(
+                    "Could not reject order via libp2p, trying legacy mechanism: {e:#}"
+                );
+            }
+        };
 
         match self
             .setup_actors

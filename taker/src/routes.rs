@@ -157,7 +157,7 @@ pub async fn post_order_request(
     _auth: Authenticated,
 ) -> Result<(), HttpApiProblem> {
     taker
-        .take_offer(
+        .place_order(
             cfd_order_request.order_id,
             cfd_order_request.quantity,
             cfd_order_request.leverage,
